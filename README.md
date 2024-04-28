@@ -1,4 +1,4 @@
-[SuperCollider-UGen-RNBO-Translations]
+SuperCollider-UGen-RNBO-Translations
 =========================
 This is a collection of Max RNBO abstractions featuring "rnboscript" translations of SuperCollider UGen source code.
 
@@ -10,5 +10,5 @@ The purpose of this is to make SuperCollider UGen DSP available in Max and all t
 
 Setup:
 ----------
-• A version of Max that supports RNBO is required
-• Put this repository (including the .rnbopat files) in a directory w/in your Max search patch to ensure the RNBO abstractions can be loaded in your Max projects. 
+- A version of Max that supports RNBO is required
+- Put this repository (including the .rnbopat files) in a directory w/in your Max search patch to ensure the RNBO abstractions can be loaded in your Max projects. 
