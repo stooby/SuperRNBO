@@ -1,0 +1,2746 @@
+{
+	"patcher" : 	{
+		"fileversion" : 1,
+		"appversion" : 		{
+			"major" : 8,
+			"minor" : 6,
+			"revision" : 2,
+			"architecture" : "x64",
+			"modernui" : 1
+		}
+,
+		"classnamespace" : "rnbo",
+		"rect" : [ -8.0, -944.0, 975.0, 875.0 ],
+		"bglocked" : 0,
+		"openinpresentation" : 0,
+		"default_fontsize" : 12.0,
+		"default_fontface" : 0,
+		"default_fontname" : "Lato",
+		"gridonopen" : 1,
+		"gridsize" : [ 15.0, 15.0 ],
+		"gridsnaponopen" : 1,
+		"objectsnaponopen" : 1,
+		"statusbarvisible" : 2,
+		"toolbarvisible" : 1,
+		"lefttoolbarpinned" : 0,
+		"toptoolbarpinned" : 0,
+		"righttoolbarpinned" : 0,
+		"bottomtoolbarpinned" : 0,
+		"toolbars_unpinned_last_save" : 1,
+		"tallnewobj" : 0,
+		"boxanimatetime" : 200,
+		"enablehscroll" : 1,
+		"enablevscroll" : 1,
+		"devicewidth" : 0.0,
+		"description" : "",
+		"digest" : "",
+		"tags" : "",
+		"style" : "",
+		"subpatcher_template" : "",
+		"assistshowspatchername" : 0,
+		"title" : "PitchShift_mono",
+		"boxes" : [ 			{
+				"box" : 				{
+					"code" : "//https://github.com/supercollider/supercollider/blob/develop/server/plugins/DelayUGens.cpp#L4573\n//A time domain granular pitch shifter.\n//Grains have a triangular amplitude envelope and an overlap of 4:1, and use linear interpolation of the buffer.\n\n//The ratio of the pitch shift. Must be from 0 to 4.\n@param({min: 0.0, max: 4.0}) pchratio = 2.0;\n\n//winsize: The size of the grain window in seconds. This value cannot be modulated when IO's active\n//The minimum value is 3 sample periods.\n//If you supply a smaller value, it will be rounded up to the minimum.\n@param({min: 0.01, max: 0.5}) winsize = 0.1; //SC default was 0.1\n    \n//The maximum random deviation of the pitch from the pitch ratio\n@param({min: 0.0, max: 4.0}) pchdisp = 0.0;\n    \n//A random offset of from zero to timeDispersion seconds is added to the delay of each grain.\n//Use of some dispersion can alleviate a hard comb filter effect due to uniform grain placement.\n//It can also be an effect in itself. timeDispersion can be no larger than windowSize\n@param({min: 0.0, max: 4.0}) timedisp = 0.006; //SC recursive conv default was 0.006\n\n\nconst delaybuf_array_size : Int = 131072; //max size needed for 0.5 sec winsize @ 48k (0.25s winsize @ 96k, etc.)\n@state delaybuf_array = new FixedSampleArray(delaybuf_array_size);\n\n@state delaybufsize_calculated : Int = 0;\n@state slope_z : number = 0.0;\n\n@state write_index : Int = 0;\n@state mask_z : Int = 0;\n\n@state counter_z : Int = 0;\n@state stage_z : Int = 0;\n@state framesize_z : Int = 0;\n@state numoutput_z : Int = 0;\n\n@state dsamp1_z : number = 0.0;\n@state dsamp2_z : number = 0.0;\n@state dsamp3_z : number = 0.0;\n@state dsamp4_z : number = 0.0;\n@state dsamp1_slope_z : number = 0.0;\n@state dsamp2_slope_z : number = 0.0;\n@state dsamp3_slope_z : number = 0.0;\n@state dsamp4_slope_z : number = 0.0;\n\n@state ramp1_z : number = 0.0;\n@state ramp2_z : number = 0.0;\n@state ramp3_z : number = 0.0;\n@state ramp4_z : number = 0.0;\n@state ramp1_slope_z : number = 0.0;\n@state ramp2_slope_z : number = 0.0;\n@state ramp3_slope_z : number = 0.0;\n@state ramp4_slope_z : number = 0.0;\n\n\n\n////////\n\nconst logs_enabled = 0;\nconst num_log_prints = 64;\n@state log_process_count;\nconst num_counter_cycles = 4;\n@state counter_count;\n\r\n//The PitchShift_next function processes each sample and updates the pitch-shifted output.\nfunction PitchShift_process(i0) {\n    /* //SC orig...\n    float *out, *in, *dlybuf;\n    float disppchratio, pchratio, pchratio1, value;\n    float dsamp1, dsamp1_slope, ramp1, ramp1_slope;\n    float dsamp2, dsamp2_slope, ramp2, ramp2_slope;\n    float dsamp3, dsamp3_slope, ramp3, ramp3_slope;\n    float dsamp4, dsamp4_slope, ramp4, ramp4_slope;\n    float d1, d2, frac, slope, samp_slope, startpos, winsize, pchdisp, timedisp;\n    long remain, nsmps, irdphase, irdphaseb, iwrphase, mask, idsamp;\n    long counter, stage, framesize;\n    */\n    var disppchratio : number = 0.0;\n    var pchratio1 : number = 0.0;\n    \n    var value : number = 0.0;\n    var d1 : number = 0.0;\n    var d2 : number = 0.0;\n    \n    var frac : number = 0.0;\n    var samp_slope : number = 0.0;\n    var startpos : number = 0.0;\n    var idsamp : Int = 0;\n    \n    var read_index_a : Int = 0; //irdphase\n    var read_index_b : Int = 0; //irdphaseb\n    \n    var input : number = i0; //store input sample data\n    var output : number = 0.0;\n    \n    var this_timedisp : number = 0.0;\n    \n    this_timedisp = clamp(timedisp, 0, winsize) * samplerate(); //144 (timedisp = 0.003 @ 48k SR)\n    \n    var in_first_cycles : Int = 0;\n    var in_wrapping_around_cycles : Int = 0;\n    var in_wrapping_around_counter_reset : Int = 0;\n\n    if (logs_enabled) {\n        //in_first_cycles = (log_process_count < num_log_prints);\n        //in_first_cycles = 0; //uncomment to turn these logs off\n        //in_wrapping_around_cycles = ((log_process_count > (mask_z - (num_log_prints*0.5))) && (log_process_count <= (mask_z + (num_log_prints*0.5))));\n        //in_wrapping_around_cycles = 0; //uncomment to turn these logs off\n        \n        //some kind of Max console log buffer overflow prevents all of these in_wrapping_around_counter_reset logs\n            //from printing if the above log sets are also enabled (last 16 get dropped in this case)\n        //in_wrapping_around_counter_reset = ((log_process_count > (1199 - (num_log_prints*0.5))) && (log_process_count <= (1199 + (num_log_prints*0.5))));\n        in_wrapping_around_counter_reset = ((log_process_count >= 1167) && (log_process_count <= 1231)); //this number range can be modified to probe other intervals\n        if (in_first_cycles || in_wrapping_around_cycles || in_wrapping_around_counter_reset) {\n            post(\"==============================================\");\n            //post(\"log_count:\");\n            //post(log_count);\n            if (in_first_cycles) {post(\">>>IN FIRST CYCLES<<<\");}\n            else if (in_wrapping_around_cycles) {post(\">>>WRAPPING AROUND CYCLES<<<\");}\n            else if (in_wrapping_around_counter_reset) {post(\">>>WRAPPING AROUND COUNTER RESET<<<\");}\n            post(\"log_process_count:\");\n            post(log_process_count);\n            post(\"------\");\n            post(\"^^^^^^^^|counter (pre-de/increment)|^^^^^^^^\");\n            post(counter);\n            post(\"^^^^^^^^|write_index (pre-de/increment)|^^^^^^^^\");\n            post(write_index);\n        }\n    }\n    \n    //remain = inNumSamples; //SC orig\n    //while (remain) { //SC orig\n    if (counter_z <= 0) {\n        counter_z = framesize_z >> 2; //reset counter to max (1200)\n        stage_z = (stage_z + 1) & 3; //set to 0 if > 3\n        disppchratio = pchratio;\n        \n        if (pchdisp != 0) {\n            disppchratio += (pchdisp * random(-1.0, 0.999)); //sub random for frand2() from SC, rand float from -1.0 - 0.999\n        }\n        \n        disppchratio = clamp(disppchratio, 0.0, 4.0);\n        pchratio1 = disppchratio - 1.0; //1.0 (if pchratio = 2 and pchdisp = 0)\n        samp_slope = -1 * pchratio1; //-1.0 (if pchratio = 2 and pchdisp = 0)\n        startpos = pchratio1 < 0.0 ? 2.0 : framesize_z * pchratio1 + 2.0; //4802 (if pchratio = 2 and pchdisp = 0)\n        startpos += (this_timedisp * random(0.0, 0.999)); //sub random for frand() from SC, rand float from 0.0 - 0.999\n        \n        if (logs_enabled) {\n            if (counter_count < num_counter_cycles) {\n                counter_count++;\n                post(\"^^^^------------ counter_z <= 0 RESET COUNTER ------------^^^^\");\n                post(\"--> counter cycle count <--\");\n                post(counter_count);\n                post(\"counter_z is now:\");\n                post(counter_z);\n                post(\"stage_z is now:\");\n                post(stage_z);\n                post(\"--startpos--\");\n                post(startpos);\n                post(\"vvvv------------ counter_z <= 0 RESET COUNTER ------------vvvv\");\n            }\n        }\n        \n        switch (stage_z) {\n            case 0:\n                dsamp1_slope_z = samp_slope;\n                dsamp1_z = startpos;\n                ramp1_z = 0.0;\n                ramp1_slope_z = slope_z;\n                ramp3_slope_z = -1 * slope_z;\n                break;\n            case 1:\n                dsamp2_slope_z = samp_slope;\n                dsamp2_z = startpos;\n                ramp2_z = 0.0;\n                ramp2_slope_z = slope_z;\n                ramp4_slope_z = -1 * slope_z;\n                break;\n            case 2:\n                dsamp3_slope_z = samp_slope;\n                dsamp3_z = startpos;\n                ramp3_z = 0.0;\n                ramp3_slope_z = slope_z;\n                ramp1_slope_z = -1 * slope_z;\n                break;\n            case 3:\n                dsamp4_slope_z = samp_slope;\n                dsamp4_z = startpos;\n                ramp4_z = 0.0;\n                ramp2_slope_z = -1 * slope_z;\n                ramp4_slope_z = slope_z;\n                break;\n        }\n    }\n    //while} //SC orig\n    //nsmps = sc_min(remain, counter); //SC orig\n    //remain -= nsmps; //SC orig\n    //counter -= nsmps; //SC orig\n\n    counter_z -= 1; //counter inits to 1200 (@48k SR winsize = 0.1)\n    //if (counter_z == 0) {post(\"counter_z == 0\");}\n    //0 - increment iwrphase + 1 and loop back to 0 when > mask (16383)\n    write_index = (write_index + 1) & mask_z; //<---!! orig position - moved below after writing input to delay buffer, otherwise we skip 0 index\n\n    if (logs_enabled) {\n        if (in_first_cycles || in_wrapping_around_cycles || in_wrapping_around_counter_reset) {\n            post(\"vvvvvvvv|counter_z|vvvvvvvv\");\n            post(counter_z);\n            post(\"vvvvvvvv|write_index|vvvvvvvv|\");\n            post(write_index);\n        }\n    }\n\n    dsamp1_z += dsamp1_slope_z; //cycle 1: dsamp1 = 3 (2 + 1)\n    //idsamp = (long)dsamp1; //SC orig\n    idsamp = trunc(dsamp1_z); //cycle 1: 3\n    frac = dsamp1_z - idsamp; //cycle 1: 0\n    read_index_a = (write_index - idsamp) & mask_z; //cycle 1: 16381\n    read_index_b = (read_index_a - 1) & mask_z; //cycle 1: 16380\n    //d1 = dlybuf[irdphase]; //SC orig\n    d1 = delaybuf_array[read_index_a]; //cycle 1: 0\n    //d2 = dlybuf[irdphaseb]; //SC orig\n    d2 = delaybuf_array[read_index_b]; //cycle 1: 0\n    value = (d1 + frac * (d2 - d1)) * ramp1_z; //cycle 1: 0\n    ramp1_z += ramp1_slope_z;\n    \n    if (logs_enabled) {\n        if (in_first_cycles || in_wrapping_around_cycles || in_wrapping_around_counter_reset) {\n            post(\"-------> dsamp1_z <-------\");\n            post(dsamp1_z);\n            post(\"idsamp:\");\n            post(idsamp);\n            post(\"frac:\");\n            post(frac);\n            post(\"read_index_a:\");\n            post(read_index_a);\n            post(\"read_index_b:\");\n            post(read_index_b);\n            post(\"......samples......\");\n            post(\"d1<delaybuf_array[read_index_a]>:\");\n            post(d1);\n            post(\"d2<delaybuf_array[read_index_b]>:\");\n            post(d2);\n            post(\"value:\");\n            post(value);\n            post(\"ramp1_z:\");\n            post(ramp1_z);\n        }\n    }\n\n    dsamp2_z += dsamp2_slope_z; //cycle 1: 3\n    idsamp = trunc(dsamp2_z); //3\n    frac = dsamp2_z - idsamp; //0\n    read_index_a = (write_index - idsamp) & mask_z; //cycle 1: 16381\n    read_index_b = (read_index_a - 1) & mask_z; //cycle 1: 16380\n    //d1 = dlybuf[irdphase]; //SC orig\n    d1 = delaybuf_array[read_index_a]; //cycle 1: 0\n    //d2 = dlybuf[irdphaseb]; //SC orig\n    d2 = delaybuf_array[read_index_b]; //cycle 1: 0\n    value += (d1 + frac * (d2 - d1)) * ramp2_z; //cycle 1: 0\n    ramp2_z += ramp2_slope_z;\n    \n    if (logs_enabled) {\n        if (in_first_cycles || in_wrapping_around_cycles || in_wrapping_around_counter_reset) {\n            post(\"-------> dsamp2_z <-------\");\n            post(dsamp2_z);\n            post(\"idsamp:\");\n            post(idsamp);\n            post(\"frac:\");\n            post(frac);\n            post(\"read_index_a:\");\n            post(read_index_a);\n            post(\"read_index_b:\");\n            post(read_index_b);\n            post(\"......samples......\");\n            post(\"d1<delaybuf_array[read_index_a]>:\");\n            post(d1);\n            post(\"d2<delaybuf_array[read_index_b]>:\");\n            post(d2);\n            post(\"value:\");\n            post(value);\n            post(\"ramp2_z:\");\n            post(ramp2_z);\n        }\n    }\n\n    dsamp3_z += dsamp3_slope_z;\n    idsamp = trunc(dsamp3_z);\n    frac = dsamp3_z - idsamp;\n    read_index_a = (write_index - idsamp) & mask_z;\n    read_index_b = (read_index_a - 1) & mask_z;\n    //d1 = dlybuf[irdphase]; //SC orig\n    d1 = delaybuf_array[read_index_a];\n    //d2 = dlybuf[irdphaseb]; //SC orig\n    d2 = delaybuf_array[read_index_b];\n    value += (d1 + frac * (d2 - d1)) * ramp3_z;\n    ramp3_z += ramp3_slope_z;\n    \n    if (logs_enabled) {\n        if (in_first_cycles || in_wrapping_around_cycles || in_wrapping_around_counter_reset) {\n            post(\"-------> dsamp3_z <-------\");\n            post(dsamp3_z);\n            post(\"idsamp:\");\n            post(idsamp);\n            post(\"frac:\");\n            post(frac);\n            post(\"read_index_a:\");\n            post(read_index_a);\n            post(\"read_index_b:\");\n            post(read_index_b);\n            post(\"......samples......\");\n            post(\"d1<delaybuf_array[read_index_a]>:\");\n            post(d1);\n            post(\"d2<delaybuf_array[read_index_b]>:\");\n            post(d2);\n            post(\"value:\");\n            post(value);\n            post(\"ramp3_z:\");\n            post(ramp3_z);\n        }\n    }\n\n    dsamp4_z += dsamp4_slope_z;\n    idsamp = trunc(dsamp4_z);\n    frac = dsamp4_z - idsamp;\n    read_index_a = (write_index - idsamp) & mask_z;\n    read_index_b = (read_index_a - 1) & mask_z;\n    //d1 = dlybuf[irdphase]; //SC orig\n    d1 = delaybuf_array[read_index_a];\n    //d2 = dlybuf[irdphaseb]; //SC orig\n    d2 = delaybuf_array[read_index_b];\n    value += (d1 + frac * (d2 - d1)) * ramp4_z;\n    ramp4_z += ramp4_slope_z;\n    \n    if (logs_enabled) {\n        if (in_first_cycles || in_wrapping_around_cycles || in_wrapping_around_counter_reset) {\n            post(\"-------> dsamp4_z <-------\");\n            post(dsamp4_z);\n            post(\"idsamp:\");\n            post(idsamp);\n            post(\"frac:\");\n            post(frac);\n            post(\"read_index_a:\");\n            post(read_index_a);\n            post(\"read_index_b:\");\n            post(read_index_b);\n            post(\"......samples......\");\n            post(\"d1<delaybuf_array[read_index_a]>:\");\n            post(d1);\n            post(\"d2<delaybuf_array[read_index_b]>:\");\n            post(d2);\n            post(\"value:\");\n            post(value);\n            post(\"ramp4_z:\");\n            post(ramp4_z);\n        }\n    }\n\n    //dlybuf[iwrphase] = ZXP(in); //SC orig...<---get in buffer data and write to dlybuf\n    delaybuf_array[write_index] = input;\n    //ZXP(out) = value *= 0.5;); //SC orig...<--- write processed value to out buffer data...\n    output = value *= 0.5; //cycle 1: 0\n    \n    //0 - increment iwrphase + 1 and loop back to 0 when > mask (16383)\n    //write_index = (write_index + 1) & mask_z; //<---!!! MOVED from above to avoid skipping index 0 on first cycle...\n    \n    \n    if (logs_enabled) {\n        if (in_first_cycles) {\n            if (log_process_count == (num_log_prints - 1)) {\n                post(\"[=== first 'num_log_prints' delaybuf values ===]\");\n                for (var i = 0; i < num_log_prints; ++i) {\n                    post(delaybuf_array[i]);\n                }\n                post(\"[======]\");\n            }\n        }\n        log_process_count++;\n    }\n    \n    return output;\n}\r\n\n//basically same as PitchShift_process(), but accounts for DSP prior to delaybuffer being filled w/ some extra checks\r\n//but introduces some unwanted frequency dependent attenuation for some reason compared to PitchShift_process()\nfunction PitchShift_process_z(i0) { //<---!!!\n    var disppchratio : number = 0;\n    var pchratio1 : number = 0;\n    var value : number = 0;\n    var d1 : number = 0;\n    var d2 : number = 0;\n    var frac : number = 0;\n    var samp_slope : number = 0;\n    var startpos : number = 0;\n    var idsamp : number = 0;\n    \n    var read_index_a : Int = 0; //irdphase\n    var read_index_b : Int = 0; //irdphaseb\n    \n    var input : number = i0;\n    var output : number = 0.0;\n    \n    var this_timedisp : number = 0;\n    \n    this_timedisp = clamp(timedisp, 0, winsize) * samplerate();\n\n    if (counter_z <= 0) {\n        counter_z = framesize_z >> 2; //reset counter to max\n        stage_z = (stage_z + 1) & 3; //increment sstage\n        disppchratio = pchratio;\n        \n        if (pchdisp != 0.0) {\n            disppchratio += (pchdisp * random(-1.0, 0.999));\n        }\n\n        disppchratio = clamp(disppchratio, 0.0, 4.0);\n        pchratio1 = disppchratio - 1.0;\n        samp_slope = -1 * pchratio1;\n        startpos = pchratio1 < 0 ? 2 : framesize_z * pchratio1 + 2;\n        startpos += (timedisp * random(0.0, 0.999));\n        \n        switch (stage_z) {\n            case 0:\n                dsamp1_slope_z = samp_slope;\n                dsamp1_z = startpos;\n                ramp1_z = 0.0;\n                ramp1_slope_z = slope_z;\n                ramp3_slope_z = -1 * slope_z;\n                break;\n            case 1:\n                dsamp2_slope_z = samp_slope;\n                dsamp2_z = startpos;\n                ramp2_z = 0.0;\n                ramp2_slope_z = slope_z;\n                ramp4_slope_z = -1 * slope_z;\n                break;\n            case 2:\n                dsamp3_slope_z = samp_slope;\n                dsamp3_z = startpos;\n                ramp3_z = 0.0;\n                ramp3_slope_z = slope_z;\n                ramp1_slope_z = -1 * slope_z;\n                break;\n            case 3:\n                dsamp4_slope_z = samp_slope;\n                dsamp4_z = startpos;\n                ramp4_z = 0.0;\n                ramp2_slope_z = -1 * slope_z;\n                ramp4_slope_z = slope_z;\n                break;\n        }\n    }\n    //nsmps = minimum(remain, counter);\n    //remain -= nsmps;\n    counter_z -= 1;\n\n    numoutput_z++;\n    write_index = (write_index + 1) & mask_z;\n\n    dsamp1_z += dsamp1_slope_z;\n    idsamp = trunc(dsamp1_z);\n    frac = dsamp1_z - idsamp;\n    read_index_a = (write_index - idsamp) & mask_z;\n    read_index_b = (read_index_a - 1) & mask_z;\n    if (numoutput_z < delaybufsize_calculated) {//processing < 1st cycle through delaybuf\n        if (read_index_a > write_index) {\n            value = 0.0;\n        } else if (read_index_b > write_index) {\n            d1 = delaybuf_array[read_index_a];\n            value = (d1 - frac * d1) * ramp1_z;\n        } else {\n            d1 = delaybuf_array[read_index_a];\n            d2 = delaybuf_array[read_index_b];\n            value = (d1 + frac * (d2 - d1)) * ramp1_z;\n        }\n    } else {//processing after 1st cycle through delaybuf\n        d1 = delaybuf_array[read_index_a];\n        d2 = delaybuf_array[read_index_b];\n        value = (d1 + frac * (d2 - d1)) * ramp1_z;\n    }\n    ramp1_z += ramp1_slope_z;\n\n    dsamp2_z += dsamp2_slope_z;\n    idsamp = trunc(dsamp2_z);\n    frac = dsamp2_z - idsamp;\n    read_index_a = (write_index - idsamp) & mask_z;\n    read_index_b = (read_index_a - 1) & mask_z;\n    if (numoutput_z < delaybufsize_calculated) {\n        if (read_index_a > write_index) {\n            // value += 0.f;\n        } else if (read_index_b > write_index) {\n            d1 = delaybuf_array[read_index_a];\n            value += (d1 - frac * d1) * ramp2_z;\n        } else {\n            d1 = delaybuf_array[read_index_a];\n            d2 = delaybuf_array[read_index_b];\n            value += (d1 + frac * (d2 - d1)) * ramp2_z;\n        }\n    } else {\n        d1 = delaybuf_array[read_index_a];\n        d2 = delaybuf_array[read_index_b];\n        value += (d1 + frac * (d2 - d1)) * ramp2_z;\n    }\n    ramp2_z += ramp2_slope_z;\n\n    dsamp3_z += dsamp3_slope_z;\n    idsamp = trunc(dsamp3_z);\n    frac = dsamp3_z - idsamp;\n    read_index_a = (write_index - idsamp) & mask_z;\n    read_index_b = (read_index_a - 1) & mask_z;\n    if (numoutput_z < delaybufsize_calculated) {\n        if (read_index_a > write_index) {\n            // value += 0.f;\n        } else if (read_index_b > write_index) {\n            d1 = delaybuf_array[read_index_a];\n            value += (d1 - frac * d1) * ramp3_z;\n        } else {\n            d1 = delaybuf_array[read_index_a];\n            d2 = delaybuf_array[read_index_b];\n            value += (d1 + frac * (d2 - d1)) * ramp3_z;\n        }\n    } else {\n        d1 = delaybuf_array[read_index_a];\n        d2 = delaybuf_array[read_index_b];\n        value += (d1 + frac * (d2 - d1)) * ramp3_z;\n    }\n    ramp3_z += ramp3_slope_z;\n\n    dsamp4_z += dsamp4_slope_z;\n    idsamp = trunc(dsamp4_z);\n    frac = dsamp4_z - idsamp;\n    read_index_a = (write_index - idsamp) & mask_z;\n    read_index_b = (read_index_a - 1) & mask_z;\n\n    if (numoutput_z < delaybufsize_calculated) {\n        if (read_index_a > write_index) {\n            // value += 0.f;\n        } else if (read_index_b > write_index) {\n            d1 = delaybuf_array[read_index_a];\n            value += (d1 - frac * d1) * ramp4_z;\n        } else {\n            d1 = delaybuf_array[read_index_a];\n            d2 = delaybuf_array[read_index_b];\n            value += (d1 + frac * (d2 - d1)) * ramp4_z;\n        }\n    } else {\n        d1 = delaybuf_array[read_index_a];\n        d2 = delaybuf_array[read_index_b];\n        value += (d1 + frac * (d2 - d1)) * ramp4_z;\n    }\n    ramp4_z += ramp4_slope_z;\n\n    delaybuf_array[write_index] = input; //get in buffer data and write into dlybuf <---\n    output = value *= 0.5; //write processed value to output buffer <---\n    \n    //if (numoutput_z >= delaybufsize_calculated) { //I don't think this is necessary in Max\n    //    PitchShift_next(); //I don't think this is necessary in Max\n    //}\n    return output;\n}\n\nfunction next_power_of_two(n)\n{\n    var n1, n2, n3, n4, n5;\n    --n;\n    \n    n1 = n >> 1;\n    n = n | n1;\n    \n    n2 = n >> 2;\n    n = n | n2;\n\n    n3 = n >> 4;\n    n = n | n3;\n    \n    n4 = n >> 8;\n    n = n | n4;\n    \n    n5 = n >> 16;\n    n = n | n5;\n\n    return n + 1;\n}\n\n//from PitchShift_Constructor()\nfunction init_pitchshift_z() {\n    \n    if (logs_enabled) {\n        post(\"init_pitchshift_z() START --------------\");\n        log_count = 0;\n        log_process_count = 0;\n        counter_count = 0;\n    }\n    \n    //float minimum_winsize = 3.f * SAMPLEDUR;\n    var minimum_winsize : number = 0.0;\n    minimum_winsize = 3 * safediv(1, samplerate());\n    if (winsize < minimum_winsize) {\n        winsize = minimum_winsize; //0.0000625 @ 48k SR\n    }\n\n    for (var i = 0; i < delaybuf_array_size; ++i) {\n        delaybuf_array[i] = 0.0; //0 out \"delay line\" array\n    }\n\n    delaybufsize_calculated = trunc(ceil((winsize * samplerate() * 3) + 3)); //14403 (for 48k SR if winsize = 0.1)\n    \n    //delaybufsize = delaybufsize + BUFLENGTH;\n    delaybufsize_calculated = delaybufsize_calculated + vectorsize(); //14659 (if 256 buffer size)\n    \n    \n    //I could output this delaybufsize value from the codeblox and use it as the size arg for an external buffer~ rnbo object\n    delaybufsize_calculated = next_power_of_two(delaybufsize_calculated); // 16384 (for 48k / 256 buffer if winsize = 0.1)\n\tif (delaybufsize_calculated > delaybuf_array_size) {delaybufsize_calculated = delaybuf_array_size;} //to safeguard against writing/reading beyond bounds of FixedSampleArray...\r\n\n    write_index = 0;\n    //unit->mask = last = (delaybufsize - 1); //updating last not necessary in Max (see above)...\n    mask_z = delaybufsize_calculated - 1; // 16383\n\n    //unit->framesize = framesize = ((long)(winsize * SAMPLERATE) + 2) & ~3; //SC\n    framesize_z = (trunc(winsize * samplerate()) + 2) & ~3; //4800 (@ 48k SR w/ 0.1 winsize)\n    \n    //unit->slope = slope = 2.f / framesize; //SC\n    slope_z = 2.0 / framesize_z; //0.000416666666667\n\n    stage_z = 3;\n    counter_z = framesize_z >> 2; //1200 (= 4800 >> 2)\n\n    ramp1_z = 0.5;\n    ramp2_z = 1.0;\n    ramp3_z = 0.5;\n    ramp4_z = 0.0;\n\n    ramp1_slope_z = -1 * slope_z; //-0.000416666666667\n    ramp2_slope_z = -1 * slope_z; //-0.000416666666667\n    ramp3_slope_z = slope_z; //0.000416666666667\n    ramp4_slope_z = slope_z; //0.000416666666667\n\n    numoutput_z = 0;\n\n    // start all read heads 2 samples behind the write head\n    //unit->dsamp1 = unit->dsamp2 = unit->dsamp3 = unit->dsamp4 = 2.f;\n    dsamp1_z = dsamp2_z = dsamp3_z = dsamp4_z = 2.0;\n    // pch ratio is initially zero for the read heads\n    //unit->dsamp1_slope = unit->dsamp2_slope = unit->dsamp3_slope = unit->dsamp4_slope = 1.f;\n    dsamp1_slope_z = dsamp2_slope_z = dsamp3_slope_z = dsamp4_slope_z = 1.0;\n    \n    if (logs_enabled) {\r\n\t\tpost(\"winsize:\");\n        post(winsize);\n        post(\"delaybufsize_calculated:\");\n        post(delaybufsize_calculated);\n        post(\"mask_z:\");\n        post(mask_z);\n        post(\"framesize_z:\");\n        post(framesize_z);\n        post(\"slope_z:\");\n        post(slope_z);\n        post(\"counter_z:\");\n        post(counter_z);\n        post(\"init_pitchshift_z() -------------- END\");\n    }\n    \n}\n\nfunction dspsetup() {\n    init_pitchshift_z();\n}\n\n//out1 = PitchShift_process_z(in1);\r\nout1 = PitchShift_process(in1);\n",
+					"fontface" : 0,
+					"fontname" : "<Monospaced>",
+					"fontsize" : 12.0,
+					"id" : "obj-7",
+					"maxclass" : "codebox~",
+					"numinlets" : 1,
+					"numoutlets" : 1,
+					"outlettype" : [ "signal" ],
+					"patching_rect" : [ 57.0, 144.0, 940.0, 689.0 ],
+					"rnbo_classname" : "codebox~",
+					"rnbo_extra_attributes" : 					{
+						"code" : "//https://github.com/supercollider/supercollider/blob/develop/server/plugins/DelayUGens.cpp#L4573\n//A time domain granular pitch shifter.\n//Grains have a triangular amplitude envelope and an overlap of 4:1, and use linear interpolation of the buffer.\n\n//The ratio of the pitch shift. Must be from 0 to 4.\n@param({min: 0.0, max: 4.0}) pchratio = 2.0;\n\n//winsize: The size of the grain window in seconds. This value cannot be modulated when IO's active\n//The minimum value is 3 sample periods.\n//If you supply a smaller value, it will be rounded up to the minimum.\n@param({min: 0.01, max: 0.5}) winsize = 0.1; //SC default was 0.1\n    \n//The maximum random deviation of the pitch from the pitch ratio\n@param({min: 0.0, max: 4.0}) pchdisp = 0.0;\n    \n//A random offset of from zero to timeDispersion seconds is added to the delay of each grain.\n//Use of some dispersion can alleviate a hard comb filter effect due to uniform grain placement.\n//It can also be an effect in itself. timeDispersion can be no larger than windowSize\n@param({min: 0.0, max: 4.0}) timedisp = 0.006; //SC recursive conv default was 0.006\n\n\nconst delaybuf_array_size : Int = 131072; //max size needed for 0.5 sec winsize @ 48k (0.25s winsize @ 96k, etc.)\n@state delaybuf_array = new FixedSampleArray(delaybuf_array_size);\n\n@state delaybufsize_calculated : Int = 0;\n@state slope_z : number = 0.0;\n\n@state write_index : Int = 0;\n@state mask_z : Int = 0;\n\n@state counter_z : Int = 0;\n@state stage_z : Int = 0;\n@state framesize_z : Int = 0;\n@state numoutput_z : Int = 0;\n\n@state dsamp1_z : number = 0.0;\n@state dsamp2_z : number = 0.0;\n@state dsamp3_z : number = 0.0;\n@state dsamp4_z : number = 0.0;\n@state dsamp1_slope_z : number = 0.0;\n@state dsamp2_slope_z : number = 0.0;\n@state dsamp3_slope_z : number = 0.0;\n@state dsamp4_slope_z : number = 0.0;\n\n@state ramp1_z : number = 0.0;\n@state ramp2_z : number = 0.0;\n@state ramp3_z : number = 0.0;\n@state ramp4_z : number = 0.0;\n@state ramp1_slope_z : number = 0.0;\n@state ramp2_slope_z : number = 0.0;\n@state ramp3_slope_z : number = 0.0;\n@state ramp4_slope_z : number = 0.0;\n\n\n\n////////\n\nconst logs_enabled = 0;\nconst num_log_prints = 64;\n@state log_process_count;\nconst num_counter_cycles = 4;\n@state counter_count;\n\r\n//The PitchShift_next function processes each sample and updates the pitch-shifted output.\nfunction PitchShift_process(i0) {\n    /* //SC orig...\n    float *out, *in, *dlybuf;\n    float disppchratio, pchratio, pchratio1, value;\n    float dsamp1, dsamp1_slope, ramp1, ramp1_slope;\n    float dsamp2, dsamp2_slope, ramp2, ramp2_slope;\n    float dsamp3, dsamp3_slope, ramp3, ramp3_slope;\n    float dsamp4, dsamp4_slope, ramp4, ramp4_slope;\n    float d1, d2, frac, slope, samp_slope, startpos, winsize, pchdisp, timedisp;\n    long remain, nsmps, irdphase, irdphaseb, iwrphase, mask, idsamp;\n    long counter, stage, framesize;\n    */\n    var disppchratio : number = 0.0;\n    var pchratio1 : number = 0.0;\n    \n    var value : number = 0.0;\n    var d1 : number = 0.0;\n    var d2 : number = 0.0;\n    \n    var frac : number = 0.0;\n    var samp_slope : number = 0.0;\n    var startpos : number = 0.0;\n    var idsamp : Int = 0;\n    \n    var read_index_a : Int = 0; //irdphase\n    var read_index_b : Int = 0; //irdphaseb\n    \n    var input : number = i0; //store input sample data\n    var output : number = 0.0;\n    \n    var this_timedisp : number = 0.0;\n    \n    this_timedisp = clamp(timedisp, 0, winsize) * samplerate(); //144 (timedisp = 0.003 @ 48k SR)\n    \n    var in_first_cycles : Int = 0;\n    var in_wrapping_around_cycles : Int = 0;\n    var in_wrapping_around_counter_reset : Int = 0;\n\n    if (logs_enabled) {\n        //in_first_cycles = (log_process_count < num_log_prints);\n        //in_first_cycles = 0; //uncomment to turn these logs off\n        //in_wrapping_around_cycles = ((log_process_count > (mask_z - (num_log_prints*0.5))) && (log_process_count <= (mask_z + (num_log_prints*0.5))));\n        //in_wrapping_around_cycles = 0; //uncomment to turn these logs off\n        \n        //some kind of Max console log buffer overflow prevents all of these in_wrapping_around_counter_reset logs\n            //from printing if the above log sets are also enabled (last 16 get dropped in this case)\n        //in_wrapping_around_counter_reset = ((log_process_count > (1199 - (num_log_prints*0.5))) && (log_process_count <= (1199 + (num_log_prints*0.5))));\n        in_wrapping_around_counter_reset = ((log_process_count >= 1167) && (log_process_count <= 1231)); //this number range can be modified to probe other intervals\n        if (in_first_cycles || in_wrapping_around_cycles || in_wrapping_around_counter_reset) {\n            post(\"==============================================\");\n            //post(\"log_count:\");\n            //post(log_count);\n            if (in_first_cycles) {post(\">>>IN FIRST CYCLES<<<\");}\n            else if (in_wrapping_around_cycles) {post(\">>>WRAPPING AROUND CYCLES<<<\");}\n            else if (in_wrapping_around_counter_reset) {post(\">>>WRAPPING AROUND COUNTER RESET<<<\");}\n            post(\"log_process_count:\");\n            post(log_process_count);\n            post(\"------\");\n            post(\"^^^^^^^^|counter (pre-de/increment)|^^^^^^^^\");\n            post(counter);\n            post(\"^^^^^^^^|write_index (pre-de/increment)|^^^^^^^^\");\n            post(write_index);\n        }\n    }\n    \n    //remain = inNumSamples; //SC orig\n    //while (remain) { //SC orig\n    if (counter_z <= 0) {\n        counter_z = framesize_z >> 2; //reset counter to max (1200)\n        stage_z = (stage_z + 1) & 3; //set to 0 if > 3\n        disppchratio = pchratio;\n        \n        if (pchdisp != 0) {\n            disppchratio += (pchdisp * random(-1.0, 0.999)); //sub random for frand2() from SC, rand float from -1.0 - 0.999\n        }\n        \n        disppchratio = clamp(disppchratio, 0.0, 4.0);\n        pchratio1 = disppchratio - 1.0; //1.0 (if pchratio = 2 and pchdisp = 0)\n        samp_slope = -1 * pchratio1; //-1.0 (if pchratio = 2 and pchdisp = 0)\n        startpos = pchratio1 < 0.0 ? 2.0 : framesize_z * pchratio1 + 2.0; //4802 (if pchratio = 2 and pchdisp = 0)\n        startpos += (this_timedisp * random(0.0, 0.999)); //sub random for frand() from SC, rand float from 0.0 - 0.999\n        \n        if (logs_enabled) {\n            if (counter_count < num_counter_cycles) {\n                counter_count++;\n                post(\"^^^^------------ counter_z <= 0 RESET COUNTER ------------^^^^\");\n                post(\"--> counter cycle count <--\");\n                post(counter_count);\n                post(\"counter_z is now:\");\n                post(counter_z);\n                post(\"stage_z is now:\");\n                post(stage_z);\n                post(\"--startpos--\");\n                post(startpos);\n                post(\"vvvv------------ counter_z <= 0 RESET COUNTER ------------vvvv\");\n            }\n        }\n        \n        switch (stage_z) {\n            case 0:\n                dsamp1_slope_z = samp_slope;\n                dsamp1_z = startpos;\n                ramp1_z = 0.0;\n                ramp1_slope_z = slope_z;\n                ramp3_slope_z = -1 * slope_z;\n                break;\n            case 1:\n                dsamp2_slope_z = samp_slope;\n                dsamp2_z = startpos;\n                ramp2_z = 0.0;\n                ramp2_slope_z = slope_z;\n                ramp4_slope_z = -1 * slope_z;\n                break;\n            case 2:\n                dsamp3_slope_z = samp_slope;\n                dsamp3_z = startpos;\n                ramp3_z = 0.0;\n                ramp3_slope_z = slope_z;\n                ramp1_slope_z = -1 * slope_z;\n                break;\n            case 3:\n                dsamp4_slope_z = samp_slope;\n                dsamp4_z = startpos;\n                ramp4_z = 0.0;\n                ramp2_slope_z = -1 * slope_z;\n                ramp4_slope_z = slope_z;\n                break;\n        }\n    }\n    //while} //SC orig\n    //nsmps = sc_min(remain, counter); //SC orig\n    //remain -= nsmps; //SC orig\n    //counter -= nsmps; //SC orig\n\n    counter_z -= 1; //counter inits to 1200 (@48k SR winsize = 0.1)\n    //if (counter_z == 0) {post(\"counter_z == 0\");}\n    //0 - increment iwrphase + 1 and loop back to 0 when > mask (16383)\n    write_index = (write_index + 1) & mask_z; //<---!! orig position - moved below after writing input to delay buffer, otherwise we skip 0 index\n\n    if (logs_enabled) {\n        if (in_first_cycles || in_wrapping_around_cycles || in_wrapping_around_counter_reset) {\n            post(\"vvvvvvvv|counter_z|vvvvvvvv\");\n            post(counter_z);\n            post(\"vvvvvvvv|write_index|vvvvvvvv|\");\n            post(write_index);\n        }\n    }\n\n    dsamp1_z += dsamp1_slope_z; //cycle 1: dsamp1 = 3 (2 + 1)\n    //idsamp = (long)dsamp1; //SC orig\n    idsamp = trunc(dsamp1_z); //cycle 1: 3\n    frac = dsamp1_z - idsamp; //cycle 1: 0\n    read_index_a = (write_index - idsamp) & mask_z; //cycle 1: 16381\n    read_index_b = (read_index_a - 1) & mask_z; //cycle 1: 16380\n    //d1 = dlybuf[irdphase]; //SC orig\n    d1 = delaybuf_array[read_index_a]; //cycle 1: 0\n    //d2 = dlybuf[irdphaseb]; //SC orig\n    d2 = delaybuf_array[read_index_b]; //cycle 1: 0\n    value = (d1 + frac * (d2 - d1)) * ramp1_z; //cycle 1: 0\n    ramp1_z += ramp1_slope_z;\n    \n    if (logs_enabled) {\n        if (in_first_cycles || in_wrapping_around_cycles || in_wrapping_around_counter_reset) {\n            post(\"-------> dsamp1_z <-------\");\n            post(dsamp1_z);\n            post(\"idsamp:\");\n            post(idsamp);\n            post(\"frac:\");\n            post(frac);\n            post(\"read_index_a:\");\n            post(read_index_a);\n            post(\"read_index_b:\");\n            post(read_index_b);\n            post(\"......samples......\");\n            post(\"d1<delaybuf_array[read_index_a]>:\");\n            post(d1);\n            post(\"d2<delaybuf_array[read_index_b]>:\");\n            post(d2);\n            post(\"value:\");\n            post(value);\n            post(\"ramp1_z:\");\n            post(ramp1_z);\n        }\n    }\n\n    dsamp2_z += dsamp2_slope_z; //cycle 1: 3\n    idsamp = trunc(dsamp2_z); //3\n    frac = dsamp2_z - idsamp; //0\n    read_index_a = (write_index - idsamp) & mask_z; //cycle 1: 16381\n    read_index_b = (read_index_a - 1) & mask_z; //cycle 1: 16380\n    //d1 = dlybuf[irdphase]; //SC orig\n    d1 = delaybuf_array[read_index_a]; //cycle 1: 0\n    //d2 = dlybuf[irdphaseb]; //SC orig\n    d2 = delaybuf_array[read_index_b]; //cycle 1: 0\n    value += (d1 + frac * (d2 - d1)) * ramp2_z; //cycle 1: 0\n    ramp2_z += ramp2_slope_z;\n    \n    if (logs_enabled) {\n        if (in_first_cycles || in_wrapping_around_cycles || in_wrapping_around_counter_reset) {\n            post(\"-------> dsamp2_z <-------\");\n            post(dsamp2_z);\n            post(\"idsamp:\");\n            post(idsamp);\n            post(\"frac:\");\n            post(frac);\n            post(\"read_index_a:\");\n            post(read_index_a);\n            post(\"read_index_b:\");\n            post(read_index_b);\n            post(\"......samples......\");\n            post(\"d1<delaybuf_array[read_index_a]>:\");\n            post(d1);\n            post(\"d2<delaybuf_array[read_index_b]>:\");\n            post(d2);\n            post(\"value:\");\n            post(value);\n            post(\"ramp2_z:\");\n            post(ramp2_z);\n        }\n    }\n\n    dsamp3_z += dsamp3_slope_z;\n    idsamp = trunc(dsamp3_z);\n    frac = dsamp3_z - idsamp;\n    read_index_a = (write_index - idsamp) & mask_z;\n    read_index_b = (read_index_a - 1) & mask_z;\n    //d1 = dlybuf[irdphase]; //SC orig\n    d1 = delaybuf_array[read_index_a];\n    //d2 = dlybuf[irdphaseb]; //SC orig\n    d2 = delaybuf_array[read_index_b];\n    value += (d1 + frac * (d2 - d1)) * ramp3_z;\n    ramp3_z += ramp3_slope_z;\n    \n    if (logs_enabled) {\n        if (in_first_cycles || in_wrapping_around_cycles || in_wrapping_around_counter_reset) {\n            post(\"-------> dsamp3_z <-------\");\n            post(dsamp3_z);\n            post(\"idsamp:\");\n            post(idsamp);\n            post(\"frac:\");\n            post(frac);\n            post(\"read_index_a:\");\n            post(read_index_a);\n            post(\"read_index_b:\");\n            post(read_index_b);\n            post(\"......samples......\");\n            post(\"d1<delaybuf_array[read_index_a]>:\");\n            post(d1);\n            post(\"d2<delaybuf_array[read_index_b]>:\");\n            post(d2);\n            post(\"value:\");\n            post(value);\n            post(\"ramp3_z:\");\n            post(ramp3_z);\n        }\n    }\n\n    dsamp4_z += dsamp4_slope_z;\n    idsamp = trunc(dsamp4_z);\n    frac = dsamp4_z - idsamp;\n    read_index_a = (write_index - idsamp) & mask_z;\n    read_index_b = (read_index_a - 1) & mask_z;\n    //d1 = dlybuf[irdphase]; //SC orig\n    d1 = delaybuf_array[read_index_a];\n    //d2 = dlybuf[irdphaseb]; //SC orig\n    d2 = delaybuf_array[read_index_b];\n    value += (d1 + frac * (d2 - d1)) * ramp4_z;\n    ramp4_z += ramp4_slope_z;\n    \n    if (logs_enabled) {\n        if (in_first_cycles || in_wrapping_around_cycles || in_wrapping_around_counter_reset) {\n            post(\"-------> dsamp4_z <-------\");\n            post(dsamp4_z);\n            post(\"idsamp:\");\n            post(idsamp);\n            post(\"frac:\");\n            post(frac);\n            post(\"read_index_a:\");\n            post(read_index_a);\n            post(\"read_index_b:\");\n            post(read_index_b);\n            post(\"......samples......\");\n            post(\"d1<delaybuf_array[read_index_a]>:\");\n            post(d1);\n            post(\"d2<delaybuf_array[read_index_b]>:\");\n            post(d2);\n            post(\"value:\");\n            post(value);\n            post(\"ramp4_z:\");\n            post(ramp4_z);\n        }\n    }\n\n    //dlybuf[iwrphase] = ZXP(in); //SC orig...<---get in buffer data and write to dlybuf\n    delaybuf_array[write_index] = input;\n    //ZXP(out) = value *= 0.5;); //SC orig...<--- write processed value to out buffer data...\n    output = value *= 0.5; //cycle 1: 0\n    \n    //0 - increment iwrphase + 1 and loop back to 0 when > mask (16383)\n    //write_index = (write_index + 1) & mask_z; //<---!!! MOVED from above to avoid skipping index 0 on first cycle...\n    \n    \n    if (logs_enabled) {\n        if (in_first_cycles) {\n            if (log_process_count == (num_log_prints - 1)) {\n                post(\"[=== first 'num_log_prints' delaybuf values ===]\");\n                for (var i = 0; i < num_log_prints; ++i) {\n                    post(delaybuf_array[i]);\n                }\n                post(\"[======]\");\n            }\n        }\n        log_process_count++;\n    }\n    \n    return output;\n}\r\n\n//basically same as PitchShift_process(), but accounts for DSP prior to delaybuffer being filled w/ some extra checks\r\n//but introduces some unwanted frequency dependent attenuation for some reason compared to PitchShift_process()\nfunction PitchShift_process_z(i0) { //<---!!!\n    var disppchratio : number = 0;\n    var pchratio1 : number = 0;\n    var value : number = 0;\n    var d1 : number = 0;\n    var d2 : number = 0;\n    var frac : number = 0;\n    var samp_slope : number = 0;\n    var startpos : number = 0;\n    var idsamp : number = 0;\n    \n    var read_index_a : Int = 0; //irdphase\n    var read_index_b : Int = 0; //irdphaseb\n    \n    var input : number = i0;\n    var output : number = 0.0;\n    \n    var this_timedisp : number = 0;\n    \n    this_timedisp = clamp(timedisp, 0, winsize) * samplerate();\n\n    if (counter_z <= 0) {\n        counter_z = framesize_z >> 2; //reset counter to max\n        stage_z = (stage_z + 1) & 3; //increment sstage\n        disppchratio = pchratio;\n        \n        if (pchdisp != 0.0) {\n            disppchratio += (pchdisp * random(-1.0, 0.999));\n        }\n\n        disppchratio = clamp(disppchratio, 0.0, 4.0);\n        pchratio1 = disppchratio - 1.0;\n        samp_slope = -1 * pchratio1;\n        startpos = pchratio1 < 0 ? 2 : framesize_z * pchratio1 + 2;\n        startpos += (timedisp * random(0.0, 0.999));\n        \n        switch (stage_z) {\n            case 0:\n                dsamp1_slope_z = samp_slope;\n                dsamp1_z = startpos;\n                ramp1_z = 0.0;\n                ramp1_slope_z = slope_z;\n                ramp3_slope_z = -1 * slope_z;\n                break;\n            case 1:\n                dsamp2_slope_z = samp_slope;\n                dsamp2_z = startpos;\n                ramp2_z = 0.0;\n                ramp2_slope_z = slope_z;\n                ramp4_slope_z = -1 * slope_z;\n                break;\n            case 2:\n                dsamp3_slope_z = samp_slope;\n                dsamp3_z = startpos;\n                ramp3_z = 0.0;\n                ramp3_slope_z = slope_z;\n                ramp1_slope_z = -1 * slope_z;\n                break;\n            case 3:\n                dsamp4_slope_z = samp_slope;\n                dsamp4_z = startpos;\n                ramp4_z = 0.0;\n                ramp2_slope_z = -1 * slope_z;\n                ramp4_slope_z = slope_z;\n                break;\n        }\n    }\n    //nsmps = minimum(remain, counter);\n    //remain -= nsmps;\n    counter_z -= 1;\n\n    numoutput_z++;\n    write_index = (write_index + 1) & mask_z;\n\n    dsamp1_z += dsamp1_slope_z;\n    idsamp = trunc(dsamp1_z);\n    frac = dsamp1_z - idsamp;\n    read_index_a = (write_index - idsamp) & mask_z;\n    read_index_b = (read_index_a - 1) & mask_z;\n    if (numoutput_z < delaybufsize_calculated) {//processing < 1st cycle through delaybuf\n        if (read_index_a > write_index) {\n            value = 0.0;\n        } else if (read_index_b > write_index) {\n            d1 = delaybuf_array[read_index_a];\n            value = (d1 - frac * d1) * ramp1_z;\n        } else {\n            d1 = delaybuf_array[read_index_a];\n            d2 = delaybuf_array[read_index_b];\n            value = (d1 + frac * (d2 - d1)) * ramp1_z;\n        }\n    } else {//processing after 1st cycle through delaybuf\n        d1 = delaybuf_array[read_index_a];\n        d2 = delaybuf_array[read_index_b];\n        value = (d1 + frac * (d2 - d1)) * ramp1_z;\n    }\n    ramp1_z += ramp1_slope_z;\n\n    dsamp2_z += dsamp2_slope_z;\n    idsamp = trunc(dsamp2_z);\n    frac = dsamp2_z - idsamp;\n    read_index_a = (write_index - idsamp) & mask_z;\n    read_index_b = (read_index_a - 1) & mask_z;\n    if (numoutput_z < delaybufsize_calculated) {\n        if (read_index_a > write_index) {\n            // value += 0.f;\n        } else if (read_index_b > write_index) {\n            d1 = delaybuf_array[read_index_a];\n            value += (d1 - frac * d1) * ramp2_z;\n        } else {\n            d1 = delaybuf_array[read_index_a];\n            d2 = delaybuf_array[read_index_b];\n            value += (d1 + frac * (d2 - d1)) * ramp2_z;\n        }\n    } else {\n        d1 = delaybuf_array[read_index_a];\n        d2 = delaybuf_array[read_index_b];\n        value += (d1 + frac * (d2 - d1)) * ramp2_z;\n    }\n    ramp2_z += ramp2_slope_z;\n\n    dsamp3_z += dsamp3_slope_z;\n    idsamp = trunc(dsamp3_z);\n    frac = dsamp3_z - idsamp;\n    read_index_a = (write_index - idsamp) & mask_z;\n    read_index_b = (read_index_a - 1) & mask_z;\n    if (numoutput_z < delaybufsize_calculated) {\n        if (read_index_a > write_index) {\n            // value += 0.f;\n        } else if (read_index_b > write_index) {\n            d1 = delaybuf_array[read_index_a];\n            value += (d1 - frac * d1) * ramp3_z;\n        } else {\n            d1 = delaybuf_array[read_index_a];\n            d2 = delaybuf_array[read_index_b];\n            value += (d1 + frac * (d2 - d1)) * ramp3_z;\n        }\n    } else {\n        d1 = delaybuf_array[read_index_a];\n        d2 = delaybuf_array[read_index_b];\n        value += (d1 + frac * (d2 - d1)) * ramp3_z;\n    }\n    ramp3_z += ramp3_slope_z;\n\n    dsamp4_z += dsamp4_slope_z;\n    idsamp = trunc(dsamp4_z);\n    frac = dsamp4_z - idsamp;\n    read_index_a = (write_index - idsamp) & mask_z;\n    read_index_b = (read_index_a - 1) & mask_z;\n\n    if (numoutput_z < delaybufsize_calculated) {\n        if (read_index_a > write_index) {\n            // value += 0.f;\n        } else if (read_index_b > write_index) {\n            d1 = delaybuf_array[read_index_a];\n            value += (d1 - frac * d1) * ramp4_z;\n        } else {\n            d1 = delaybuf_array[read_index_a];\n            d2 = delaybuf_array[read_index_b];\n            value += (d1 + frac * (d2 - d1)) * ramp4_z;\n        }\n    } else {\n        d1 = delaybuf_array[read_index_a];\n        d2 = delaybuf_array[read_index_b];\n        value += (d1 + frac * (d2 - d1)) * ramp4_z;\n    }\n    ramp4_z += ramp4_slope_z;\n\n    delaybuf_array[write_index] = input; //get in buffer data and write into dlybuf <---\n    output = value *= 0.5; //write processed value to output buffer <---\n    \n    //if (numoutput_z >= delaybufsize_calculated) { //I don't think this is necessary in Max\n    //    PitchShift_next(); //I don't think this is necessary in Max\n    //}\n    return output;\n}\n\nfunction next_power_of_two(n)\n{\n    var n1, n2, n3, n4, n5;\n    --n;\n    \n    n1 = n >> 1;\n    n = n | n1;\n    \n    n2 = n >> 2;\n    n = n | n2;\n\n    n3 = n >> 4;\n    n = n | n3;\n    \n    n4 = n >> 8;\n    n = n | n4;\n    \n    n5 = n >> 16;\n    n = n | n5;\n\n    return n + 1;\n}\n\n//from PitchShift_Constructor()\nfunction init_pitchshift_z() {\n    \n    if (logs_enabled) {\n        post(\"init_pitchshift_z() START --------------\");\n        log_count = 0;\n        log_process_count = 0;\n        counter_count = 0;\n    }\n    \n    //float minimum_winsize = 3.f * SAMPLEDUR;\n    var minimum_winsize : number = 0.0;\n    minimum_winsize = 3 * safediv(1, samplerate());\n    if (winsize < minimum_winsize) {\n        winsize = minimum_winsize; //0.0000625 @ 48k SR\n    }\n\n    for (var i = 0; i < delaybuf_array_size; ++i) {\n        delaybuf_array[i] = 0.0; //0 out \"delay line\" array\n    }\n\n    delaybufsize_calculated = trunc(ceil((winsize * samplerate() * 3) + 3)); //14403 (for 48k SR if winsize = 0.1)\n    \n    //delaybufsize = delaybufsize + BUFLENGTH;\n    delaybufsize_calculated = delaybufsize_calculated + vectorsize(); //14659 (if 256 buffer size)\n    \n    \n    //I could output this delaybufsize value from the codeblox and use it as the size arg for an external buffer~ rnbo object\n    delaybufsize_calculated = next_power_of_two(delaybufsize_calculated); // 16384 (for 48k / 256 buffer if winsize = 0.1)\n\tif (delaybufsize_calculated > delaybuf_array_size) {delaybufsize_calculated = delaybuf_array_size;} //to safeguard against writing/reading beyond bounds of FixedSampleArray...\r\n\n    write_index = 0;\n    //unit->mask = last = (delaybufsize - 1); //updating last not necessary in Max (see above)...\n    mask_z = delaybufsize_calculated - 1; // 16383\n\n    //unit->framesize = framesize = ((long)(winsize * SAMPLERATE) + 2) & ~3; //SC\n    framesize_z = (trunc(winsize * samplerate()) + 2) & ~3; //4800 (@ 48k SR w/ 0.1 winsize)\n    \n    //unit->slope = slope = 2.f / framesize; //SC\n    slope_z = 2.0 / framesize_z; //0.000416666666667\n\n    stage_z = 3;\n    counter_z = framesize_z >> 2; //1200 (= 4800 >> 2)\n\n    ramp1_z = 0.5;\n    ramp2_z = 1.0;\n    ramp3_z = 0.5;\n    ramp4_z = 0.0;\n\n    ramp1_slope_z = -1 * slope_z; //-0.000416666666667\n    ramp2_slope_z = -1 * slope_z; //-0.000416666666667\n    ramp3_slope_z = slope_z; //0.000416666666667\n    ramp4_slope_z = slope_z; //0.000416666666667\n\n    numoutput_z = 0;\n\n    // start all read heads 2 samples behind the write head\n    //unit->dsamp1 = unit->dsamp2 = unit->dsamp3 = unit->dsamp4 = 2.f;\n    dsamp1_z = dsamp2_z = dsamp3_z = dsamp4_z = 2.0;\n    // pch ratio is initially zero for the read heads\n    //unit->dsamp1_slope = unit->dsamp2_slope = unit->dsamp3_slope = unit->dsamp4_slope = 1.f;\n    dsamp1_slope_z = dsamp2_slope_z = dsamp3_slope_z = dsamp4_slope_z = 1.0;\n    \n    if (logs_enabled) {\r\n\t\tpost(\"winsize:\");\n        post(winsize);\n        post(\"delaybufsize_calculated:\");\n        post(delaybufsize_calculated);\n        post(\"mask_z:\");\n        post(mask_z);\n        post(\"framesize_z:\");\n        post(framesize_z);\n        post(\"slope_z:\");\n        post(slope_z);\n        post(\"counter_z:\");\n        post(counter_z);\n        post(\"init_pitchshift_z() -------------- END\");\n    }\n    \n}\n\nfunction dspsetup() {\n    init_pitchshift_z();\n}\n\n//out1 = PitchShift_process_z(in1);\r\nout1 = PitchShift_process(in1);\n",
+						"expr" : "",
+						"safemath" : 1
+					}
+,
+					"rnbo_serial" : 1,
+					"rnbo_uniqueid" : "codebox~_obj-7",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"reset" : 							{
+								"attrOrProp" : 1,
+								"digest" : "Reset all state and params to initial values",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 1,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bang"
+							}
+,
+							"in1" : 							{
+								"attrOrProp" : 1,
+								"digest" : "in1",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"inlet" : 1,
+								"type" : "number"
+							}
+,
+							"out1" : 							{
+								"attrOrProp" : 1,
+								"digest" : "out1",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"outlet" : 1,
+								"type" : "signal"
+							}
+,
+							"pchratio" : 							{
+								"attrOrProp" : 1,
+								"digest" : "pchratio",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 1,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "2"
+							}
+,
+							"winsize" : 							{
+								"attrOrProp" : 1,
+								"digest" : "winsize",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 1,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0.1"
+							}
+,
+							"pchdisp" : 							{
+								"attrOrProp" : 1,
+								"digest" : "pchdisp",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 1,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0"
+							}
+,
+							"timedisp" : 							{
+								"attrOrProp" : 1,
+								"digest" : "timedisp",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 1,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0.006"
+							}
+,
+							"expr" : 							{
+								"attrOrProp" : 2,
+								"digest" : "expr",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol"
+							}
+,
+							"safemath" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Use safe math expressions (e.g.: division by 0 will not crash).",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bool",
+								"defaultValue" : "true"
+							}
+
+						}
+,
+						"inputs" : [ 							{
+								"name" : "in1",
+								"type" : "auto",
+								"digest" : "in1",
+								"hot" : 1,
+								"docked" : 0
+							}
+ ],
+						"outputs" : [ 							{
+								"name" : "out1",
+								"type" : "signal",
+								"digest" : "out1",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "codebox~",
+						"aliasOf" : "expr~",
+						"classname" : "codebox~",
+						"operator" : 0,
+						"versionId" : 999733430,
+						"changesPatcherIO" : 0
+					}
+
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-43",
+					"maxclass" : "newobj",
+					"numinlets" : 0,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"patching_rect" : [ 808.0, 14.0, 28.0, 23.0 ],
+					"rnbo_classname" : "in",
+					"rnbo_extra_attributes" : 					{
+						"meta" : "",
+						"comment" : "Time Dispersion (0 - 4 sec)"
+					}
+,
+					"rnbo_serial" : 1,
+					"rnbo_uniqueid" : "in_obj-43",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"index" : 							{
+								"attrOrProp" : 2,
+								"digest" : "inlet number",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"mandatory" : 1
+							}
+,
+							"comment" : 							{
+								"attrOrProp" : 2,
+								"digest" : "mouse over comment",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol"
+							}
+,
+							"meta" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A JSON formatted string containing metadata for use by the exported code",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Metadata",
+								"displayorder" : 3
+							}
+
+						}
+,
+						"inputs" : [  ],
+						"outputs" : [ 							{
+								"name" : "out1",
+								"type" : [ "bang", "number", "list" ],
+								"digest" : "value from inlet with index 5",
+								"displayName" : "Time Dispersion (0 - 4 sec)",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "in",
+						"aliasOf" : "in",
+						"classname" : "in",
+						"operator" : 0,
+						"versionId" : 1219109108,
+						"changesPatcherIO" : 1
+					}
+,
+					"text" : "in 5"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-42",
+					"maxclass" : "newobj",
+					"numinlets" : 0,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"patching_rect" : [ 583.0, 14.0, 28.0, 23.0 ],
+					"rnbo_classname" : "in",
+					"rnbo_extra_attributes" : 					{
+						"meta" : "",
+						"comment" : "Pitch Dispersion (0 - 4)"
+					}
+,
+					"rnbo_serial" : 2,
+					"rnbo_uniqueid" : "in_obj-42",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"index" : 							{
+								"attrOrProp" : 2,
+								"digest" : "inlet number",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"mandatory" : 1
+							}
+,
+							"comment" : 							{
+								"attrOrProp" : 2,
+								"digest" : "mouse over comment",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol"
+							}
+,
+							"meta" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A JSON formatted string containing metadata for use by the exported code",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Metadata",
+								"displayorder" : 3
+							}
+
+						}
+,
+						"inputs" : [  ],
+						"outputs" : [ 							{
+								"name" : "out1",
+								"type" : [ "bang", "number", "list" ],
+								"digest" : "value from inlet with index 4",
+								"displayName" : "Pitch Dispersion (0 - 4)",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "in",
+						"aliasOf" : "in",
+						"classname" : "in",
+						"operator" : 0,
+						"versionId" : 1219109108,
+						"changesPatcherIO" : 1
+					}
+,
+					"text" : "in 4"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-41",
+					"maxclass" : "newobj",
+					"numinlets" : 0,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"patching_rect" : [ 336.0, 14.0, 28.0, 23.0 ],
+					"rnbo_classname" : "in",
+					"rnbo_extra_attributes" : 					{
+						"meta" : "",
+						"comment" : "Window Size (0.01 - 0.5 sec) "
+					}
+,
+					"rnbo_serial" : 5,
+					"rnbo_uniqueid" : "in_obj-41",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"index" : 							{
+								"attrOrProp" : 2,
+								"digest" : "inlet number",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"mandatory" : 1
+							}
+,
+							"comment" : 							{
+								"attrOrProp" : 2,
+								"digest" : "mouse over comment",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol"
+							}
+,
+							"meta" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A JSON formatted string containing metadata for use by the exported code",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Metadata",
+								"displayorder" : 3
+							}
+
+						}
+,
+						"inputs" : [  ],
+						"outputs" : [ 							{
+								"name" : "out1",
+								"type" : [ "bang", "number", "list" ],
+								"digest" : "value from inlet with index 3",
+								"displayName" : "Window Size (0.01 - 0.5 sec) ",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "in",
+						"aliasOf" : "in",
+						"classname" : "in",
+						"operator" : 0,
+						"versionId" : 1219109108,
+						"changesPatcherIO" : 1
+					}
+,
+					"text" : "in 3"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-40",
+					"maxclass" : "newobj",
+					"numinlets" : 0,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"patching_rect" : [ 131.0, 14.0, 28.0, 23.0 ],
+					"rnbo_classname" : "in",
+					"rnbo_extra_attributes" : 					{
+						"meta" : "",
+						"comment" : "Pitch Ratio (0 - 4)"
+					}
+,
+					"rnbo_serial" : 4,
+					"rnbo_uniqueid" : "in_obj-40",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"index" : 							{
+								"attrOrProp" : 2,
+								"digest" : "inlet number",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"mandatory" : 1
+							}
+,
+							"comment" : 							{
+								"attrOrProp" : 2,
+								"digest" : "mouse over comment",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol"
+							}
+,
+							"meta" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A JSON formatted string containing metadata for use by the exported code",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Metadata",
+								"displayorder" : 3
+							}
+
+						}
+,
+						"inputs" : [  ],
+						"outputs" : [ 							{
+								"name" : "out1",
+								"type" : [ "bang", "number", "list" ],
+								"digest" : "value from inlet with index 2",
+								"displayName" : "Pitch Ratio (0 - 4)",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "in",
+						"aliasOf" : "in",
+						"classname" : "in",
+						"operator" : 0,
+						"versionId" : 1219109108,
+						"changesPatcherIO" : 1
+					}
+,
+					"text" : "in 2"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-39",
+					"maxclass" : "newobj",
+					"numinlets" : 1,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"patching_rect" : [ 808.0, 75.0, 72.0, 23.0 ],
+					"rnbo_classname" : "set",
+					"rnbo_serial" : 1,
+					"rnbo_uniqueid" : "set_obj-39",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"name" : 							{
+								"attrOrProp" : 2,
+								"digest" : "attribute/param to control",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"mandatory" : 1
+							}
+
+						}
+,
+						"inputs" : [ 							{
+								"name" : "input",
+								"type" : [ "bang", "number", "list", "signal" ],
+								"digest" : "attribute or parameter value (bang, number, list)",
+								"hot" : 1,
+								"docked" : 0
+							}
+ ],
+						"outputs" : [ 							{
+								"name" : "output",
+								"type" : [ "bang", "number", "list", "signal" ],
+								"digest" : "connect to first inlet of gen or subpatcher",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "set",
+						"aliasOf" : "set",
+						"classname" : "set",
+						"operator" : 0,
+						"versionId" : 2121358407,
+						"changesPatcherIO" : 0
+					}
+,
+					"text" : "set timedisp"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-38",
+					"maxclass" : "newobj",
+					"numinlets" : 1,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"patching_rect" : [ 583.0, 75.0, 68.0, 23.0 ],
+					"rnbo_classname" : "set",
+					"rnbo_serial" : 2,
+					"rnbo_uniqueid" : "set_obj-38",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"name" : 							{
+								"attrOrProp" : 2,
+								"digest" : "attribute/param to control",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"mandatory" : 1
+							}
+
+						}
+,
+						"inputs" : [ 							{
+								"name" : "input",
+								"type" : [ "bang", "number", "list", "signal" ],
+								"digest" : "attribute or parameter value (bang, number, list)",
+								"hot" : 1,
+								"docked" : 0
+							}
+ ],
+						"outputs" : [ 							{
+								"name" : "output",
+								"type" : [ "bang", "number", "list", "signal" ],
+								"digest" : "connect to first inlet of gen or subpatcher",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "set",
+						"aliasOf" : "set",
+						"classname" : "set",
+						"operator" : 0,
+						"versionId" : 2121358407,
+						"changesPatcherIO" : 0
+					}
+,
+					"text" : "set pchdisp"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-37",
+					"maxclass" : "newobj",
+					"numinlets" : 1,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"patching_rect" : [ 336.0, 75.0, 66.0, 23.0 ],
+					"rnbo_classname" : "set",
+					"rnbo_serial" : 3,
+					"rnbo_uniqueid" : "set_obj-37",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"name" : 							{
+								"attrOrProp" : 2,
+								"digest" : "attribute/param to control",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"mandatory" : 1
+							}
+
+						}
+,
+						"inputs" : [ 							{
+								"name" : "input",
+								"type" : [ "bang", "number", "list", "signal" ],
+								"digest" : "attribute or parameter value (bang, number, list)",
+								"hot" : 1,
+								"docked" : 0
+							}
+ ],
+						"outputs" : [ 							{
+								"name" : "output",
+								"type" : [ "bang", "number", "list", "signal" ],
+								"digest" : "connect to first inlet of gen or subpatcher",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "set",
+						"aliasOf" : "set",
+						"classname" : "set",
+						"operator" : 0,
+						"versionId" : 2121358407,
+						"changesPatcherIO" : 0
+					}
+,
+					"text" : "set winsize"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-36",
+					"maxclass" : "newobj",
+					"numinlets" : 1,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"patching_rect" : [ 131.0, 70.0, 71.0, 23.0 ],
+					"rnbo_classname" : "set",
+					"rnbo_serial" : 4,
+					"rnbo_uniqueid" : "set_obj-36",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"name" : 							{
+								"attrOrProp" : 2,
+								"digest" : "attribute/param to control",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"mandatory" : 1
+							}
+
+						}
+,
+						"inputs" : [ 							{
+								"name" : "input",
+								"type" : [ "bang", "number", "list", "signal" ],
+								"digest" : "attribute or parameter value (bang, number, list)",
+								"hot" : 1,
+								"docked" : 0
+							}
+ ],
+						"outputs" : [ 							{
+								"name" : "output",
+								"type" : [ "bang", "number", "list", "signal" ],
+								"digest" : "connect to first inlet of gen or subpatcher",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "set",
+						"aliasOf" : "set",
+						"classname" : "set",
+						"operator" : 0,
+						"versionId" : 2121358407,
+						"changesPatcherIO" : 0
+					}
+,
+					"text" : "set pchratio"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-35",
+					"maxclass" : "newobj",
+					"numinlets" : 2,
+					"numoutlets" : 2,
+					"outlettype" : [ "", "" ],
+					"patching_rect" : [ 808.0, 42.0, 216.0, 23.0 ],
+					"rnbo_classname" : "param",
+					"rnbo_extra_attributes" : 					{
+						"unit" : "",
+						"exponent" : 1.0,
+						"displayname" : "",
+						"order" : "0",
+						"tonormalized" : "",
+						"fromnormalized" : "",
+						"meta" : "",
+						"enum" : "",
+						"preset" : 1,
+						"steps" : 0.0,
+						"displayorder" : "-",
+						"sendinit" : 1,
+						"ctlin" : 0.0
+					}
+,
+					"rnbo_serial" : 1,
+					"rnbo_uniqueid" : "timedisp",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"value" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Set initial value",
+								"defaultarg" : 2,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Initial Value",
+								"displayorder" : 3
+							}
+,
+							"normalizedvalue" : 							{
+								"attrOrProp" : 1,
+								"digest" : "Set value normalized. ",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"inlet" : 1,
+								"type" : "number"
+							}
+,
+							"reset" : 							{
+								"attrOrProp" : 1,
+								"digest" : "Reset param to initial value",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 1,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bang"
+							}
+,
+							"normalized" : 							{
+								"attrOrProp" : 1,
+								"digest" : "Normalized parameter value.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"outlet" : 1,
+								"type" : "number"
+							}
+,
+							"name" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Name of the parameter",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"label" : "Parameter Name",
+								"mandatory" : 1
+							}
+,
+							"enum" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Use an enumerated output",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "list",
+								"label" : "Enum Values",
+								"displayorder" : 6
+							}
+,
+							"minimum" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Minimum value",
+								"isalias" : 0,
+								"aliases" : [ "min" ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Minimum",
+								"displayorder" : 1
+							}
+,
+							"min" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Minimum value",
+								"isalias" : 1,
+								"aliasOf" : "minimum",
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Minimum",
+								"displayorder" : 1
+							}
+,
+							"maximum" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Maximum value",
+								"isalias" : 0,
+								"aliases" : [ "max" ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "1",
+								"label" : "Maximum",
+								"displayorder" : 2
+							}
+,
+							"max" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Maximum value",
+								"isalias" : 1,
+								"aliasOf" : "maximum",
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "1",
+								"label" : "Maximum",
+								"displayorder" : 2
+							}
+,
+							"exponent" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Scale values exponentially",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "1",
+								"label" : "Exponent",
+								"displayorder" : 7
+							}
+,
+							"steps" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Divide the output into a number of discrete steps",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Steps",
+								"displayorder" : 8
+							}
+,
+							"displayName" : 							{
+								"attrOrProp" : 2,
+								"digest" : "DEPRECATED: Use the lower case 'displayname' instead",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 1,
+								"type" : "symbol",
+								"label" : "Display Name"
+							}
+,
+							"displayname" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A more readable name for the parameter in an external RNBO target",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Display Name",
+								"displayorder" : 14
+							}
+,
+							"unit" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A symbol to describe the unit of the parameter in an external RNBO target",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Unit",
+								"displayorder" : 15
+							}
+,
+							"tonormalized" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Converts a real parameter value to its normalized form.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"label" : "To Normalized Expression",
+								"displayorder" : 10
+							}
+,
+							"fromnormalized" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Converts a normalized parameter into its actual parameter value.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"label" : "From Normalized Expression",
+								"displayorder" : 9
+							}
+,
+							"order" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Order in which initial parameter values will be sent out on patcher load. The order can be numeric or symbolic ('first' and 'last')",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "0",
+								"label" : "Restore Order",
+								"displayorder" : 12
+							}
+,
+							"displayorder" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Order in which parameters will show up in a list of all parameters. The order can be numeric or symbolic ('first' and 'last')",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "-",
+								"label" : "Display Order",
+								"displayorder" : 13
+							}
+,
+							"sendinit" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Send initial value",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bool",
+								"defaultValue" : "true",
+								"label" : "Send Init",
+								"displayorder" : 4
+							}
+,
+							"ctlin" : 							{
+								"attrOrProp" : 2,
+								"digest" : "MIDI controller number to control this parameter.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"label" : "MIDI Controller Number.",
+								"displayorder" : 16
+							}
+,
+							"meta" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A JSON formatted string containing metadata for use by the exported code",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Metadata",
+								"displayorder" : 17
+							}
+,
+							"nopreset" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Do not add this value to the preset [DEPRECATED - USE @preset 0 instead].",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 1,
+								"type" : "bool",
+								"defaultValue" : "false"
+							}
+,
+							"preset" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Add this value to the preset.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bool",
+								"defaultValue" : "true",
+								"label" : "Include In Preset",
+								"displayorder" : 11
+							}
+
+						}
+,
+						"inputs" : [ 							{
+								"name" : "value",
+								"type" : "number",
+								"digest" : "Parameter value",
+								"hot" : 1,
+								"docked" : 0
+							}
+, 							{
+								"name" : "normalizedvalue",
+								"type" : "number",
+								"digest" : "Set value normalized. ",
+								"docked" : 0
+							}
+ ],
+						"outputs" : [ 							{
+								"name" : "value",
+								"type" : "number",
+								"digest" : "Parameter value",
+								"hot" : 1,
+								"docked" : 0
+							}
+, 							{
+								"name" : "normalized",
+								"type" : "number",
+								"digest" : "Normalized parameter value.",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "param",
+						"aliasOf" : "param",
+						"classname" : "param",
+						"operator" : 0,
+						"versionId" : -1940971094,
+						"changesPatcherIO" : 0
+					}
+,
+					"text" : "param timedisp 0.006 @min 0. @max 4.",
+					"varname" : "timedisp"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-34",
+					"maxclass" : "newobj",
+					"numinlets" : 2,
+					"numoutlets" : 2,
+					"outlettype" : [ "", "" ],
+					"patching_rect" : [ 583.0, 42.0, 206.0, 23.0 ],
+					"rnbo_classname" : "param",
+					"rnbo_extra_attributes" : 					{
+						"unit" : "",
+						"exponent" : 1.0,
+						"displayname" : "",
+						"order" : "0",
+						"tonormalized" : "",
+						"fromnormalized" : "",
+						"meta" : "",
+						"enum" : "",
+						"preset" : 1,
+						"steps" : 0.0,
+						"displayorder" : "-",
+						"sendinit" : 1,
+						"ctlin" : 0.0
+					}
+,
+					"rnbo_serial" : 2,
+					"rnbo_uniqueid" : "pchdisp",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"value" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Set initial value",
+								"defaultarg" : 2,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Initial Value",
+								"displayorder" : 3
+							}
+,
+							"normalizedvalue" : 							{
+								"attrOrProp" : 1,
+								"digest" : "Set value normalized. ",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"inlet" : 1,
+								"type" : "number"
+							}
+,
+							"reset" : 							{
+								"attrOrProp" : 1,
+								"digest" : "Reset param to initial value",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 1,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bang"
+							}
+,
+							"normalized" : 							{
+								"attrOrProp" : 1,
+								"digest" : "Normalized parameter value.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"outlet" : 1,
+								"type" : "number"
+							}
+,
+							"name" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Name of the parameter",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"label" : "Parameter Name",
+								"mandatory" : 1
+							}
+,
+							"enum" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Use an enumerated output",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "list",
+								"label" : "Enum Values",
+								"displayorder" : 6
+							}
+,
+							"minimum" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Minimum value",
+								"isalias" : 0,
+								"aliases" : [ "min" ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Minimum",
+								"displayorder" : 1
+							}
+,
+							"min" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Minimum value",
+								"isalias" : 1,
+								"aliasOf" : "minimum",
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Minimum",
+								"displayorder" : 1
+							}
+,
+							"maximum" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Maximum value",
+								"isalias" : 0,
+								"aliases" : [ "max" ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "1",
+								"label" : "Maximum",
+								"displayorder" : 2
+							}
+,
+							"max" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Maximum value",
+								"isalias" : 1,
+								"aliasOf" : "maximum",
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "1",
+								"label" : "Maximum",
+								"displayorder" : 2
+							}
+,
+							"exponent" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Scale values exponentially",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "1",
+								"label" : "Exponent",
+								"displayorder" : 7
+							}
+,
+							"steps" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Divide the output into a number of discrete steps",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Steps",
+								"displayorder" : 8
+							}
+,
+							"displayName" : 							{
+								"attrOrProp" : 2,
+								"digest" : "DEPRECATED: Use the lower case 'displayname' instead",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 1,
+								"type" : "symbol",
+								"label" : "Display Name"
+							}
+,
+							"displayname" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A more readable name for the parameter in an external RNBO target",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Display Name",
+								"displayorder" : 14
+							}
+,
+							"unit" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A symbol to describe the unit of the parameter in an external RNBO target",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Unit",
+								"displayorder" : 15
+							}
+,
+							"tonormalized" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Converts a real parameter value to its normalized form.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"label" : "To Normalized Expression",
+								"displayorder" : 10
+							}
+,
+							"fromnormalized" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Converts a normalized parameter into its actual parameter value.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"label" : "From Normalized Expression",
+								"displayorder" : 9
+							}
+,
+							"order" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Order in which initial parameter values will be sent out on patcher load. The order can be numeric or symbolic ('first' and 'last')",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "0",
+								"label" : "Restore Order",
+								"displayorder" : 12
+							}
+,
+							"displayorder" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Order in which parameters will show up in a list of all parameters. The order can be numeric or symbolic ('first' and 'last')",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "-",
+								"label" : "Display Order",
+								"displayorder" : 13
+							}
+,
+							"sendinit" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Send initial value",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bool",
+								"defaultValue" : "true",
+								"label" : "Send Init",
+								"displayorder" : 4
+							}
+,
+							"ctlin" : 							{
+								"attrOrProp" : 2,
+								"digest" : "MIDI controller number to control this parameter.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"label" : "MIDI Controller Number.",
+								"displayorder" : 16
+							}
+,
+							"meta" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A JSON formatted string containing metadata for use by the exported code",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Metadata",
+								"displayorder" : 17
+							}
+,
+							"nopreset" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Do not add this value to the preset [DEPRECATED - USE @preset 0 instead].",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 1,
+								"type" : "bool",
+								"defaultValue" : "false"
+							}
+,
+							"preset" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Add this value to the preset.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bool",
+								"defaultValue" : "true",
+								"label" : "Include In Preset",
+								"displayorder" : 11
+							}
+
+						}
+,
+						"inputs" : [ 							{
+								"name" : "value",
+								"type" : "number",
+								"digest" : "Parameter value",
+								"hot" : 1,
+								"docked" : 0
+							}
+, 							{
+								"name" : "normalizedvalue",
+								"type" : "number",
+								"digest" : "Set value normalized. ",
+								"docked" : 0
+							}
+ ],
+						"outputs" : [ 							{
+								"name" : "value",
+								"type" : "number",
+								"digest" : "Parameter value",
+								"hot" : 1,
+								"docked" : 0
+							}
+, 							{
+								"name" : "normalized",
+								"type" : "number",
+								"digest" : "Normalized parameter value.",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "param",
+						"aliasOf" : "param",
+						"classname" : "param",
+						"operator" : 0,
+						"versionId" : -1940971094,
+						"changesPatcherIO" : 0
+					}
+,
+					"text" : "param pchdisp 0. @min 0. @max 4.",
+					"varname" : "pchdisp"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-33",
+					"maxclass" : "newobj",
+					"numinlets" : 2,
+					"numoutlets" : 2,
+					"outlettype" : [ "", "" ],
+					"patching_rect" : [ 336.0, 42.0, 217.0, 23.0 ],
+					"rnbo_classname" : "param",
+					"rnbo_extra_attributes" : 					{
+						"unit" : "",
+						"exponent" : 1.0,
+						"displayname" : "",
+						"order" : "0",
+						"tonormalized" : "",
+						"fromnormalized" : "",
+						"meta" : "",
+						"enum" : "",
+						"preset" : 1,
+						"steps" : 0.0,
+						"displayorder" : "-",
+						"sendinit" : 1,
+						"ctlin" : 0.0
+					}
+,
+					"rnbo_serial" : 3,
+					"rnbo_uniqueid" : "winsize",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"value" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Set initial value",
+								"defaultarg" : 2,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Initial Value",
+								"displayorder" : 3
+							}
+,
+							"normalizedvalue" : 							{
+								"attrOrProp" : 1,
+								"digest" : "Set value normalized. ",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"inlet" : 1,
+								"type" : "number"
+							}
+,
+							"reset" : 							{
+								"attrOrProp" : 1,
+								"digest" : "Reset param to initial value",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 1,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bang"
+							}
+,
+							"normalized" : 							{
+								"attrOrProp" : 1,
+								"digest" : "Normalized parameter value.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"outlet" : 1,
+								"type" : "number"
+							}
+,
+							"name" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Name of the parameter",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"label" : "Parameter Name",
+								"mandatory" : 1
+							}
+,
+							"enum" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Use an enumerated output",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "list",
+								"label" : "Enum Values",
+								"displayorder" : 6
+							}
+,
+							"minimum" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Minimum value",
+								"isalias" : 0,
+								"aliases" : [ "min" ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Minimum",
+								"displayorder" : 1
+							}
+,
+							"min" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Minimum value",
+								"isalias" : 1,
+								"aliasOf" : "minimum",
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Minimum",
+								"displayorder" : 1
+							}
+,
+							"maximum" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Maximum value",
+								"isalias" : 0,
+								"aliases" : [ "max" ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "1",
+								"label" : "Maximum",
+								"displayorder" : 2
+							}
+,
+							"max" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Maximum value",
+								"isalias" : 1,
+								"aliasOf" : "maximum",
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "1",
+								"label" : "Maximum",
+								"displayorder" : 2
+							}
+,
+							"exponent" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Scale values exponentially",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "1",
+								"label" : "Exponent",
+								"displayorder" : 7
+							}
+,
+							"steps" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Divide the output into a number of discrete steps",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Steps",
+								"displayorder" : 8
+							}
+,
+							"displayName" : 							{
+								"attrOrProp" : 2,
+								"digest" : "DEPRECATED: Use the lower case 'displayname' instead",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 1,
+								"type" : "symbol",
+								"label" : "Display Name"
+							}
+,
+							"displayname" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A more readable name for the parameter in an external RNBO target",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Display Name",
+								"displayorder" : 14
+							}
+,
+							"unit" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A symbol to describe the unit of the parameter in an external RNBO target",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Unit",
+								"displayorder" : 15
+							}
+,
+							"tonormalized" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Converts a real parameter value to its normalized form.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"label" : "To Normalized Expression",
+								"displayorder" : 10
+							}
+,
+							"fromnormalized" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Converts a normalized parameter into its actual parameter value.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"label" : "From Normalized Expression",
+								"displayorder" : 9
+							}
+,
+							"order" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Order in which initial parameter values will be sent out on patcher load. The order can be numeric or symbolic ('first' and 'last')",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "0",
+								"label" : "Restore Order",
+								"displayorder" : 12
+							}
+,
+							"displayorder" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Order in which parameters will show up in a list of all parameters. The order can be numeric or symbolic ('first' and 'last')",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "-",
+								"label" : "Display Order",
+								"displayorder" : 13
+							}
+,
+							"sendinit" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Send initial value",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bool",
+								"defaultValue" : "true",
+								"label" : "Send Init",
+								"displayorder" : 4
+							}
+,
+							"ctlin" : 							{
+								"attrOrProp" : 2,
+								"digest" : "MIDI controller number to control this parameter.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"label" : "MIDI Controller Number.",
+								"displayorder" : 16
+							}
+,
+							"meta" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A JSON formatted string containing metadata for use by the exported code",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Metadata",
+								"displayorder" : 17
+							}
+,
+							"nopreset" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Do not add this value to the preset [DEPRECATED - USE @preset 0 instead].",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 1,
+								"type" : "bool",
+								"defaultValue" : "false"
+							}
+,
+							"preset" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Add this value to the preset.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bool",
+								"defaultValue" : "true",
+								"label" : "Include In Preset",
+								"displayorder" : 11
+							}
+
+						}
+,
+						"inputs" : [ 							{
+								"name" : "value",
+								"type" : "number",
+								"digest" : "Parameter value",
+								"hot" : 1,
+								"docked" : 0
+							}
+, 							{
+								"name" : "normalizedvalue",
+								"type" : "number",
+								"digest" : "Set value normalized. ",
+								"docked" : 0
+							}
+ ],
+						"outputs" : [ 							{
+								"name" : "value",
+								"type" : "number",
+								"digest" : "Parameter value",
+								"hot" : 1,
+								"docked" : 0
+							}
+, 							{
+								"name" : "normalized",
+								"type" : "number",
+								"digest" : "Normalized parameter value.",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "param",
+						"aliasOf" : "param",
+						"classname" : "param",
+						"operator" : 0,
+						"versionId" : -1940971094,
+						"changesPatcherIO" : 0
+					}
+,
+					"text" : "param winsize 0.1 @min 0.01 @max 0.5",
+					"varname" : "winsize"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-32",
+					"maxclass" : "newobj",
+					"numinlets" : 2,
+					"numoutlets" : 2,
+					"outlettype" : [ "", "" ],
+					"patching_rect" : [ 131.0, 42.0, 194.0, 23.0 ],
+					"rnbo_classname" : "param",
+					"rnbo_extra_attributes" : 					{
+						"unit" : "",
+						"exponent" : 1.0,
+						"displayname" : "",
+						"order" : "0",
+						"tonormalized" : "",
+						"fromnormalized" : "",
+						"meta" : "",
+						"enum" : "",
+						"preset" : 1,
+						"steps" : 0.0,
+						"displayorder" : "-",
+						"sendinit" : 1,
+						"ctlin" : 0.0
+					}
+,
+					"rnbo_serial" : 4,
+					"rnbo_uniqueid" : "pchratio",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"value" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Set initial value",
+								"defaultarg" : 2,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Initial Value",
+								"displayorder" : 3
+							}
+,
+							"normalizedvalue" : 							{
+								"attrOrProp" : 1,
+								"digest" : "Set value normalized. ",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"inlet" : 1,
+								"type" : "number"
+							}
+,
+							"reset" : 							{
+								"attrOrProp" : 1,
+								"digest" : "Reset param to initial value",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 1,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bang"
+							}
+,
+							"normalized" : 							{
+								"attrOrProp" : 1,
+								"digest" : "Normalized parameter value.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"outlet" : 1,
+								"type" : "number"
+							}
+,
+							"name" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Name of the parameter",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"label" : "Parameter Name",
+								"mandatory" : 1
+							}
+,
+							"enum" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Use an enumerated output",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "list",
+								"label" : "Enum Values",
+								"displayorder" : 6
+							}
+,
+							"minimum" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Minimum value",
+								"isalias" : 0,
+								"aliases" : [ "min" ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Minimum",
+								"displayorder" : 1
+							}
+,
+							"min" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Minimum value",
+								"isalias" : 1,
+								"aliasOf" : "minimum",
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Minimum",
+								"displayorder" : 1
+							}
+,
+							"maximum" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Maximum value",
+								"isalias" : 0,
+								"aliases" : [ "max" ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "1",
+								"label" : "Maximum",
+								"displayorder" : 2
+							}
+,
+							"max" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Maximum value",
+								"isalias" : 1,
+								"aliasOf" : "maximum",
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "1",
+								"label" : "Maximum",
+								"displayorder" : 2
+							}
+,
+							"exponent" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Scale values exponentially",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "1",
+								"label" : "Exponent",
+								"displayorder" : 7
+							}
+,
+							"steps" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Divide the output into a number of discrete steps",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"defaultValue" : "0",
+								"label" : "Steps",
+								"displayorder" : 8
+							}
+,
+							"displayName" : 							{
+								"attrOrProp" : 2,
+								"digest" : "DEPRECATED: Use the lower case 'displayname' instead",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 1,
+								"type" : "symbol",
+								"label" : "Display Name"
+							}
+,
+							"displayname" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A more readable name for the parameter in an external RNBO target",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Display Name",
+								"displayorder" : 14
+							}
+,
+							"unit" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A symbol to describe the unit of the parameter in an external RNBO target",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Unit",
+								"displayorder" : 15
+							}
+,
+							"tonormalized" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Converts a real parameter value to its normalized form.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"label" : "To Normalized Expression",
+								"displayorder" : 10
+							}
+,
+							"fromnormalized" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Converts a normalized parameter into its actual parameter value.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"label" : "From Normalized Expression",
+								"displayorder" : 9
+							}
+,
+							"order" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Order in which initial parameter values will be sent out on patcher load. The order can be numeric or symbolic ('first' and 'last')",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "0",
+								"label" : "Restore Order",
+								"displayorder" : 12
+							}
+,
+							"displayorder" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Order in which parameters will show up in a list of all parameters. The order can be numeric or symbolic ('first' and 'last')",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "-",
+								"label" : "Display Order",
+								"displayorder" : 13
+							}
+,
+							"sendinit" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Send initial value",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bool",
+								"defaultValue" : "true",
+								"label" : "Send Init",
+								"displayorder" : 4
+							}
+,
+							"ctlin" : 							{
+								"attrOrProp" : 2,
+								"digest" : "MIDI controller number to control this parameter.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"label" : "MIDI Controller Number.",
+								"displayorder" : 16
+							}
+,
+							"meta" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A JSON formatted string containing metadata for use by the exported code",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Metadata",
+								"displayorder" : 17
+							}
+,
+							"nopreset" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Do not add this value to the preset [DEPRECATED - USE @preset 0 instead].",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 1,
+								"type" : "bool",
+								"defaultValue" : "false"
+							}
+,
+							"preset" : 							{
+								"attrOrProp" : 2,
+								"digest" : "Add this value to the preset.",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "bool",
+								"defaultValue" : "true",
+								"label" : "Include In Preset",
+								"displayorder" : 11
+							}
+
+						}
+,
+						"inputs" : [ 							{
+								"name" : "value",
+								"type" : "number",
+								"digest" : "Parameter value",
+								"hot" : 1,
+								"docked" : 0
+							}
+, 							{
+								"name" : "normalizedvalue",
+								"type" : "number",
+								"digest" : "Set value normalized. ",
+								"docked" : 0
+							}
+ ],
+						"outputs" : [ 							{
+								"name" : "value",
+								"type" : "number",
+								"digest" : "Parameter value",
+								"hot" : 1,
+								"docked" : 0
+							}
+, 							{
+								"name" : "normalized",
+								"type" : "number",
+								"digest" : "Normalized parameter value.",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "param",
+						"aliasOf" : "param",
+						"classname" : "param",
+						"operator" : 0,
+						"versionId" : -1940971094,
+						"changesPatcherIO" : 0
+					}
+,
+					"text" : "param pchratio 2. @min 0. @max 4.",
+					"varname" : "pchratio"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-2",
+					"maxclass" : "newobj",
+					"numinlets" : 1,
+					"numoutlets" : 0,
+					"patching_rect" : [ 57.0, 868.0, 43.0, 23.0 ],
+					"rnbo_classname" : "out~",
+					"rnbo_extra_attributes" : 					{
+						"meta" : "",
+						"comment" : ""
+					}
+,
+					"rnbo_serial" : 1,
+					"rnbo_uniqueid" : "out~_obj-2",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"in1" : 							{
+								"attrOrProp" : 1,
+								"digest" : "signal sent to outlet with index 1",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 0,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"inlet" : 1,
+								"type" : "signal"
+							}
+,
+							"index" : 							{
+								"attrOrProp" : 2,
+								"digest" : "outlet number",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"mandatory" : 1
+							}
+,
+							"comment" : 							{
+								"attrOrProp" : 2,
+								"digest" : "mouse over comment",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol"
+							}
+,
+							"meta" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A JSON formatted string containing metadata for use by the exported code",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Metadata",
+								"displayorder" : 3
+							}
+
+						}
+,
+						"inputs" : [ 							{
+								"name" : "in1",
+								"type" : "signal",
+								"digest" : "signal sent to outlet with index 1",
+								"displayName" : "",
+								"hot" : 1,
+								"docked" : 0
+							}
+ ],
+						"outputs" : [  ],
+						"helpname" : "out~",
+						"aliasOf" : "out~",
+						"classname" : "out~",
+						"operator" : 0,
+						"versionId" : 374499139,
+						"changesPatcherIO" : 1
+					}
+,
+					"text" : "out~ 1"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-1",
+					"maxclass" : "newobj",
+					"numinlets" : 0,
+					"numoutlets" : 1,
+					"outlettype" : [ "signal" ],
+					"patching_rect" : [ 57.0, 14.0, 35.0, 23.0 ],
+					"rnbo_classname" : "in~",
+					"rnbo_extra_attributes" : 					{
+						"meta" : "",
+						"comment" : ""
+					}
+,
+					"rnbo_serial" : 1,
+					"rnbo_uniqueid" : "in~_obj-1",
+					"rnboinfo" : 					{
+						"needsInstanceInfo" : 1,
+						"argnames" : 						{
+							"out1" : 							{
+								"attrOrProp" : 1,
+								"digest" : "signal from inlet with index 1",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 0,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"outlet" : 1,
+								"type" : "signal"
+							}
+,
+							"index" : 							{
+								"attrOrProp" : 2,
+								"digest" : "inlet number",
+								"defaultarg" : 1,
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "number",
+								"mandatory" : 1
+							}
+,
+							"comment" : 							{
+								"attrOrProp" : 2,
+								"digest" : "mouse over comment",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol"
+							}
+,
+							"meta" : 							{
+								"attrOrProp" : 2,
+								"digest" : "A JSON formatted string containing metadata for use by the exported code",
+								"isalias" : 0,
+								"aliases" : [  ],
+								"settable" : 1,
+								"attachable" : 0,
+								"isparam" : 0,
+								"deprecated" : 0,
+								"type" : "symbol",
+								"defaultValue" : "",
+								"label" : "Metadata",
+								"displayorder" : 3
+							}
+
+						}
+,
+						"inputs" : [  ],
+						"outputs" : [ 							{
+								"name" : "out1",
+								"type" : "signal",
+								"digest" : "signal from inlet with index 1",
+								"displayName" : "",
+								"docked" : 0
+							}
+ ],
+						"helpname" : "in~",
+						"aliasOf" : "in~",
+						"classname" : "in~",
+						"operator" : 0,
+						"versionId" : -176007711,
+						"changesPatcherIO" : 1
+					}
+,
+					"text" : "in~ 1"
+				}
+
+			}
+ ],
+		"lines" : [ 			{
+				"patchline" : 				{
+					"destination" : [ "obj-7", 0 ],
+					"source" : [ "obj-1", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-36", 0 ],
+					"source" : [ "obj-32", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-37", 0 ],
+					"source" : [ "obj-33", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-38", 0 ],
+					"source" : [ "obj-34", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-39", 0 ],
+					"source" : [ "obj-35", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-7", 0 ],
+					"source" : [ "obj-36", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-7", 0 ],
+					"source" : [ "obj-37", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-7", 0 ],
+					"source" : [ "obj-38", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-7", 0 ],
+					"source" : [ "obj-39", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-32", 0 ],
+					"source" : [ "obj-40", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-33", 0 ],
+					"source" : [ "obj-41", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-34", 0 ],
+					"source" : [ "obj-42", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-35", 0 ],
+					"source" : [ "obj-43", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-2", 0 ],
+					"source" : [ "obj-7", 0 ]
+				}
+
+			}
+ ],
+		"default_bgcolor" : [ 0.031372549019608, 0.125490196078431, 0.211764705882353, 1.0 ],
+		"color" : [ 0.929412, 0.929412, 0.352941, 1.0 ],
+		"elementcolor" : [ 0.357540726661682, 0.515565991401672, 0.861786782741547, 1.0 ],
+		"accentcolor" : [ 0.343034118413925, 0.506230533123016, 0.86220508813858, 1.0 ],
+		"stripecolor" : [ 0.258338063955307, 0.352425158023834, 0.511919498443604, 1.0 ],
+		"bgfillcolor_type" : "color",
+		"bgfillcolor_color" : [ 0.031372549019608, 0.125490196078431, 0.211764705882353, 1.0 ],
+		"bgfillcolor_color1" : [ 0.031372549019608, 0.125490196078431, 0.211764705882353, 1.0 ],
+		"bgfillcolor_color2" : [ 0.263682, 0.004541, 0.038797, 1.0 ],
+		"bgfillcolor_angle" : 270.0,
+		"bgfillcolor_proportion" : 0.39,
+		"bgfillcolor_autogradient" : 0.0
+	}
+
+}
