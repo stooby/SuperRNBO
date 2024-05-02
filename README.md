@@ -11,4 +11,4 @@ The purpose of this is to make SuperCollider UGen DSP available in Max and all t
 Setup:
 ----------
 - A version of Max that supports RNBO is required
-- Put this repository (including the .rnbopat files) in a directory w/in your Max search patch to ensure the RNBO abstractions can be loaded in your Max projects. 
+- Put this repository (including the .rnbopat files) in a directory w/in your Max search path to ensure the RNBO abstractions can be loaded in your Max projects. 
