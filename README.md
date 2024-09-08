@@ -1,6 +1,6 @@
-SuperCollider-UGen-RNBO-Translations
+SuperRNBO
 =========================
-This is a collection of Max RNBO abstractions featuring "rnboscript" translations of SuperCollider UGen source code.
+This is a collection of Max RNBO abstractions featuring rnboscript translations of SuperCollider UGen source code.
 
 This isn't intended to be an exhaustive translation of all SuperCollider UGens, but rather a small selection of my personal favorites
 to demonstrate how SuperCollider UGen DSP code can be made available in Max and all the export targets RNBO supports 
