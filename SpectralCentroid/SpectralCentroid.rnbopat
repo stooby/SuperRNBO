@@ -209,19 +209,19 @@
 					"patching_rect" : [ 804.0, 106.0, 195.0, 23.0 ],
 					"rnbo_classname" : "param",
 					"rnbo_extra_attributes" : 					{
-						"enum" : "",
-						"exponent" : 1.0,
-						"displayorder" : "-",
 						"preset" : 1,
-						"displayname" : "",
-						"sendinit" : 1,
-						"unit" : "",
-						"ctlin" : 0.0,
+						"displayorder" : "-",
 						"meta" : "",
+						"ctlin" : 0.0,
+						"fromnormalized" : "",
+						"sendinit" : 1,
+						"enum" : "",
 						"steps" : 0.0,
+						"displayname" : "",
+						"unit" : "",
 						"order" : "0",
-						"tonormalized" : "",
-						"fromnormalized" : ""
+						"exponent" : 1.0,
+						"tonormalized" : ""
 					}
 ,
 					"rnbo_serial" : 1,
@@ -711,8 +711,8 @@
 					"patching_rect" : [ 750.0, 779.0, 50.0, 23.0 ],
 					"rnbo_classname" : "number",
 					"rnbo_extra_attributes" : 					{
-						"maximum" : "<none>",
 						"minimum" : "<none>",
+						"maximum" : "<none>",
 						"preset" : 0,
 						"order" : "",
 						"initialFormat" : "float"
@@ -818,7 +818,7 @@
 			}
 , 			{
 				"box" : 				{
-					"code" : "@param({min: 64, max: 2048}) fftsize = 64;\n//@state last_fftsize = 0; //<----not needed unless you want to log fftsize changes\n\n@param({min: 0, max: 1}) needs_init = 1;\n//@state last_needs_init = 0; //<----not needed unless you want to log needs_init changes\n\n@state numbins : Int = 0; // numbins is the fftsize bin count not including DC/nyq (fftsize / 2 - 1)\n@state bintofreq = 0.0;\n\nconst specCentroid_data_array_size : Int = 2048; //max possible value of fftsize (buffer size)...\n//@state specCentroid_data_array_size : Int = fftsize; //this would be the only ever value, but can't cast @param in this way in RNBO (causes error)\n@state specCentroid_data_array = new FixedFloatArray(specCentroid_data_array_size);\n\n\n@state fftbuf = new buffer(\"local:fftbuf_1\"); //reference to data \"fftbuf\" object in RNBO patch\n\nfunction specCentroid_init(this_fftsize) {\n    for (var i = 0; i < specCentroid_data_array_size; i++) {\n        specCentroid_data_array[i] = 0.0; //0 out data array\n    }\n    \n    //int numbins = (buf->samples - 2) >> 1; //source FFTAnalyser_GET_BUF\n    numbins = (this_fftsize - 2) >> 1; //(fftsize / 2 - 1)\n    //post(\"[specCentroid_init] numbins:\");\n    //post(numbins);\n    \n    var samplerate = samplerate();\n    bintofreq = samplerate / this_fftsize; //from GET_BINTOFREQ\n    //post(\"[specCentroid_init] samplerate:\");\n    //post(samplerate);\n    //post(\"[specCentroid_init] bintofreq =\");\n    //post(bintofreq);\n}\n\n//Load the current frame of FFT data into specCentroid_data_array\nfunction specCentroid_load_frame(this_fftsize) {\n    \n    if (this_fftsize > specCentroid_data_array_size) {\n        //safeguard against writing out of bounds of specCentroid_data_array\n        this_fftsize = specCentroid_data_array_size;\n        post(\"WARNING!!! fftsize was set to value > specCentroid_data_array_size\");\n        post(\"fftsize now = specCentroid_data_array_size to avoid crash\");\n    }\n    \n    //store all fftbuf data in specCentroid_data_array in SC's native FFT buffer format: [dc, nyq, bin1 mag, bin1 phase, bin2 mag, bin2 phase, etc]...\n    for (var i : Int = 0; i < this_fftsize/2; i++) {\n        if (i < 1) {\n            //post(\"===========\");\n            //no conversion needed for these...\n            var dc = peek(fftbuf, 0);\n            var nyq = peek(fftbuf, 1);\n            specCentroid_data_array[0] = dc[0];\n            specCentroid_data_array[1] = nyq[0];\n        }\n        else if (i >= 1 && (i < this_fftsize/2)) {\n            var index_x : Int = 2 * i;\n            var index_y : Int = index_x + 1;\n            var real = peek(fftbuf, index_x);\n            var imaginary = peek(fftbuf, index_y);\n            \n            var polar = cartopol(real[0], imaginary[0]); //convert to polar\n            specCentroid_data_array[index_x] = polar[0]; //mag\n            specCentroid_data_array[index_y] = polar[1]; //phase\n        }\n    }\n}\n\nfunction SpecCentroid_next() {\n    var outval = 0.0;\n    \n    if (needs_init) {\n        specCentroid_init(fftsize);\n        needs_init = 0;\n    }\n    \n    \n    //FFTAnalyser_GET_BUF //source\n    specCentroid_load_frame(fftsize);\n    \n    //SCPolarBuf* p = ToPolarApx(buf); //source (in specCentroid_load_frame() )\n\n    //GET_BINTOFREQ //source (in specCentroid_init() )\n    \n    //double num = sc_abs(p->nyq) * (numbins + 1); //source\n    var num = abs(specCentroid_data_array[1]) * (numbins + 1);\n    \n    //double denom = sc_abs(p->nyq); //source\n    var denom = abs(specCentroid_data_array[1]);\n\n    for (var i = 0; i < numbins; ++i) {\n        var index_bin_mag : Int = (2 * i) + 2; //bin mag values are even indeces starting at 2 (dc and nyq are 0 and 1) in 'specCentroid_data_array'\n        \n        //num += sc_abs(p->bin[i].mag) * (i + 1); //source\n        num += abs(specCentroid_data_array[index_bin_mag]) * (i + 1);\n        \n        //denom += sc_abs(p->bin[i].mag); //source\n        denom += abs(specCentroid_data_array[index_bin_mag]);\n    }\n\n    //ZOUT0(0) = unit->outval = denom == 0.0 ? 0.f : (float)(bintofreq * num / denom); //source\n    outval = denom == 0.0 ? 0.0 : (bintofreq * num / denom);\n    out1 = outval;\n}\n\nSpecCentroid_next();\n",
+					"code" : "@param({min: 64, max: 2048}) fftsize = 64;\n//@state last_fftsize = 0; //<----not needed unless you want to log fftsize changes\n\n@param({min: 0, max: 1}) needs_init = 1;\n//@state last_needs_init = 0; //<----not needed unless you want to log needs_init changes\n\n@state numbins : Int = 0; // numbins is the fftsize bin count not including DC/nyq (fftsize / 2 - 1)\n@state bintofreq = 0.0;\r\n\nconst specCentroid_data_array_size : Int = 2048; //max possible value of fftsize (buffer size)...\n//@state specCentroid_data_array_size : Int = fftsize; //this would be the only ever value, but can't cast @param in this way in RNBO (causes error)\n@state specCentroid_data_array = new FixedFloatArray(specCentroid_data_array_size);\n\n\n@state fftbuf = new buffer(\"local:fftbuf_1\"); //reference to data \"fftbuf\" object in RNBO patch\n\nfunction specCentroid_init(this_fftsize) {\n    for (var i = 0; i < specCentroid_data_array_size; i++) {\n        specCentroid_data_array[i] = 0.0; //0 out data array\n    }\n    \n    //int numbins = (buf->samples - 2) >> 1; //source FFTAnalyser_GET_BUF\n    numbins = (this_fftsize - 2) >> 1; //(fftsize / 2 - 1)\n    //post(\"[specCentroid_init] numbins:\");\n    //post(numbins);\n    \n    var samplerate = samplerate();\n    bintofreq = samplerate / this_fftsize; //from GET_BINTOFREQ\n    //post(\"[specCentroid_init] samplerate:\");\n    //post(samplerate);\n    //post(\"[specCentroid_init] bintofreq =\");\n    //post(bintofreq);\n}\n\n//Load the current frame of FFT data into specCentroid_data_array\nfunction specCentroid_load_frame(this_fftsize) {\n    \n    if (this_fftsize > specCentroid_data_array_size) {\n        //safeguard against writing out of bounds of specCentroid_data_array\n        this_fftsize = specCentroid_data_array_size;\n        post(\"WARNING!!! fftsize was set to value > specCentroid_data_array_size\");\n        post(\"fftsize now = specCentroid_data_array_size to avoid crash\");\n    }\n    \n    //store all fftbuf data in specCentroid_data_array in SC's native FFT buffer format: [dc, nyq, bin1 mag, bin1 phase, bin2 mag, bin2 phase, etc]...\n    for (var i : Int = 0; i < this_fftsize/2; i++) {\n        if (i < 1) {\n            //post(\"===========\");\n            //no conversion needed for these...\n            var dc = peek(fftbuf, 0);\n            var nyq = peek(fftbuf, 1);\n            specCentroid_data_array[0] = dc[0];\n            specCentroid_data_array[1] = nyq[0];\n        }\n        else if (i >= 1 && (i < this_fftsize/2)) {\n            var index_x : Int = 2 * i;\n            var index_y : Int = index_x + 1;\n            var real = peek(fftbuf, index_x);\n            var imaginary = peek(fftbuf, index_y);\n            \n            var polar = cartopol(real[0], imaginary[0]); //convert to polar\n            specCentroid_data_array[index_x] = polar[0]; //mag\n            specCentroid_data_array[index_y] = polar[1]; //phase\n        }\n    }\n}\n\nfunction SpecCentroid_next() {\n    var outval = 0.0;\n    \n    if (needs_init) {\n        specCentroid_init(fftsize);\n        needs_init = 0;\n    }\n    \n    \n    //FFTAnalyser_GET_BUF //source\n    specCentroid_load_frame(fftsize);\n    \n    //SCPolarBuf* p = ToPolarApx(buf); //source (in specCentroid_load_frame() )\n\n    //GET_BINTOFREQ //source (in specCentroid_init() )\n    \n    //double num = sc_abs(p->nyq) * (numbins + 1); //source\n    var num = abs(specCentroid_data_array[1]) * (numbins + 1);\n    \n    //double denom = sc_abs(p->nyq); //source\n    var denom = abs(specCentroid_data_array[1]);\n\n    for (var i = 0; i < numbins; ++i) {\n        var index_bin_mag : Int = (2 * i) + 2; //bin mag values are even indeces starting at 2 (dc and nyq are 0 and 1) in 'specCentroid_data_array'\n        \n        //num += sc_abs(p->bin[i].mag) * (i + 1); //source\n        num += abs(specCentroid_data_array[index_bin_mag]) * (i + 1);\n        \n        //denom += sc_abs(p->bin[i].mag); //source\n        denom += abs(specCentroid_data_array[index_bin_mag]);\n    }\n\n    //ZOUT0(0) = unit->outval = denom == 0.0 ? 0.f : (float)(bintofreq * num / denom); //source\n    outval = denom == 0.0 ? 0.0 : (bintofreq * num / denom);\r\n\tout1 = outval;\n}\n\nSpecCentroid_next();\n",
 					"fontface" : 0,
 					"fontname" : "<Monospaced>",
 					"fontsize" : 12.0,
@@ -830,9 +830,9 @@
 					"patching_rect" : [ 725.0, 248.0, 716.0, 510.0 ],
 					"rnbo_classname" : "codebox",
 					"rnbo_extra_attributes" : 					{
-						"code" : "@param({min: 64, max: 2048}) fftsize = 64;\n//@state last_fftsize = 0; //<----not needed unless you want to log fftsize changes\n\n@param({min: 0, max: 1}) needs_init = 1;\n//@state last_needs_init = 0; //<----not needed unless you want to log needs_init changes\n\n@state numbins : Int = 0; // numbins is the fftsize bin count not including DC/nyq (fftsize / 2 - 1)\n@state bintofreq = 0.0;\n\nconst specCentroid_data_array_size : Int = 2048; //max possible value of fftsize (buffer size)...\n//@state specCentroid_data_array_size : Int = fftsize; //this would be the only ever value, but can't cast @param in this way in RNBO (causes error)\n@state specCentroid_data_array = new FixedFloatArray(specCentroid_data_array_size);\n\n\n@state fftbuf = new buffer(\"local:fftbuf_1\"); //reference to data \"fftbuf\" object in RNBO patch\n\nfunction specCentroid_init(this_fftsize) {\n    for (var i = 0; i < specCentroid_data_array_size; i++) {\n        specCentroid_data_array[i] = 0.0; //0 out data array\n    }\n    \n    //int numbins = (buf->samples - 2) >> 1; //source FFTAnalyser_GET_BUF\n    numbins = (this_fftsize - 2) >> 1; //(fftsize / 2 - 1)\n    //post(\"[specCentroid_init] numbins:\");\n    //post(numbins);\n    \n    var samplerate = samplerate();\n    bintofreq = samplerate / this_fftsize; //from GET_BINTOFREQ\n    //post(\"[specCentroid_init] samplerate:\");\n    //post(samplerate);\n    //post(\"[specCentroid_init] bintofreq =\");\n    //post(bintofreq);\n}\n\n//Load the current frame of FFT data into specCentroid_data_array\nfunction specCentroid_load_frame(this_fftsize) {\n    \n    if (this_fftsize > specCentroid_data_array_size) {\n        //safeguard against writing out of bounds of specCentroid_data_array\n        this_fftsize = specCentroid_data_array_size;\n        post(\"WARNING!!! fftsize was set to value > specCentroid_data_array_size\");\n        post(\"fftsize now = specCentroid_data_array_size to avoid crash\");\n    }\n    \n    //store all fftbuf data in specCentroid_data_array in SC's native FFT buffer format: [dc, nyq, bin1 mag, bin1 phase, bin2 mag, bin2 phase, etc]...\n    for (var i : Int = 0; i < this_fftsize/2; i++) {\n        if (i < 1) {\n            //post(\"===========\");\n            //no conversion needed for these...\n            var dc = peek(fftbuf, 0);\n            var nyq = peek(fftbuf, 1);\n            specCentroid_data_array[0] = dc[0];\n            specCentroid_data_array[1] = nyq[0];\n        }\n        else if (i >= 1 && (i < this_fftsize/2)) {\n            var index_x : Int = 2 * i;\n            var index_y : Int = index_x + 1;\n            var real = peek(fftbuf, index_x);\n            var imaginary = peek(fftbuf, index_y);\n            \n            var polar = cartopol(real[0], imaginary[0]); //convert to polar\n            specCentroid_data_array[index_x] = polar[0]; //mag\n            specCentroid_data_array[index_y] = polar[1]; //phase\n        }\n    }\n}\n\nfunction SpecCentroid_next() {\n    var outval = 0.0;\n    \n    if (needs_init) {\n        specCentroid_init(fftsize);\n        needs_init = 0;\n    }\n    \n    \n    //FFTAnalyser_GET_BUF //source\n    specCentroid_load_frame(fftsize);\n    \n    //SCPolarBuf* p = ToPolarApx(buf); //source (in specCentroid_load_frame() )\n\n    //GET_BINTOFREQ //source (in specCentroid_init() )\n    \n    //double num = sc_abs(p->nyq) * (numbins + 1); //source\n    var num = abs(specCentroid_data_array[1]) * (numbins + 1);\n    \n    //double denom = sc_abs(p->nyq); //source\n    var denom = abs(specCentroid_data_array[1]);\n\n    for (var i = 0; i < numbins; ++i) {\n        var index_bin_mag : Int = (2 * i) + 2; //bin mag values are even indeces starting at 2 (dc and nyq are 0 and 1) in 'specCentroid_data_array'\n        \n        //num += sc_abs(p->bin[i].mag) * (i + 1); //source\n        num += abs(specCentroid_data_array[index_bin_mag]) * (i + 1);\n        \n        //denom += sc_abs(p->bin[i].mag); //source\n        denom += abs(specCentroid_data_array[index_bin_mag]);\n    }\n\n    //ZOUT0(0) = unit->outval = denom == 0.0 ? 0.f : (float)(bintofreq * num / denom); //source\n    outval = denom == 0.0 ? 0.0 : (bintofreq * num / denom);\n    out1 = outval;\n}\n\nSpecCentroid_next();\n",
-						"safemath" : 1,
-						"hot" : 0
+						"code" : "@param({min: 64, max: 2048}) fftsize = 64;\n//@state last_fftsize = 0; //<----not needed unless you want to log fftsize changes\n\n@param({min: 0, max: 1}) needs_init = 1;\n//@state last_needs_init = 0; //<----not needed unless you want to log needs_init changes\n\n@state numbins : Int = 0; // numbins is the fftsize bin count not including DC/nyq (fftsize / 2 - 1)\n@state bintofreq = 0.0;\r\n\nconst specCentroid_data_array_size : Int = 2048; //max possible value of fftsize (buffer size)...\n//@state specCentroid_data_array_size : Int = fftsize; //this would be the only ever value, but can't cast @param in this way in RNBO (causes error)\n@state specCentroid_data_array = new FixedFloatArray(specCentroid_data_array_size);\n\n\n@state fftbuf = new buffer(\"local:fftbuf_1\"); //reference to data \"fftbuf\" object in RNBO patch\n\nfunction specCentroid_init(this_fftsize) {\n    for (var i = 0; i < specCentroid_data_array_size; i++) {\n        specCentroid_data_array[i] = 0.0; //0 out data array\n    }\n    \n    //int numbins = (buf->samples - 2) >> 1; //source FFTAnalyser_GET_BUF\n    numbins = (this_fftsize - 2) >> 1; //(fftsize / 2 - 1)\n    //post(\"[specCentroid_init] numbins:\");\n    //post(numbins);\n    \n    var samplerate = samplerate();\n    bintofreq = samplerate / this_fftsize; //from GET_BINTOFREQ\n    //post(\"[specCentroid_init] samplerate:\");\n    //post(samplerate);\n    //post(\"[specCentroid_init] bintofreq =\");\n    //post(bintofreq);\n}\n\n//Load the current frame of FFT data into specCentroid_data_array\nfunction specCentroid_load_frame(this_fftsize) {\n    \n    if (this_fftsize > specCentroid_data_array_size) {\n        //safeguard against writing out of bounds of specCentroid_data_array\n        this_fftsize = specCentroid_data_array_size;\n        post(\"WARNING!!! fftsize was set to value > specCentroid_data_array_size\");\n        post(\"fftsize now = specCentroid_data_array_size to avoid crash\");\n    }\n    \n    //store all fftbuf data in specCentroid_data_array in SC's native FFT buffer format: [dc, nyq, bin1 mag, bin1 phase, bin2 mag, bin2 phase, etc]...\n    for (var i : Int = 0; i < this_fftsize/2; i++) {\n        if (i < 1) {\n            //post(\"===========\");\n            //no conversion needed for these...\n            var dc = peek(fftbuf, 0);\n            var nyq = peek(fftbuf, 1);\n            specCentroid_data_array[0] = dc[0];\n            specCentroid_data_array[1] = nyq[0];\n        }\n        else if (i >= 1 && (i < this_fftsize/2)) {\n            var index_x : Int = 2 * i;\n            var index_y : Int = index_x + 1;\n            var real = peek(fftbuf, index_x);\n            var imaginary = peek(fftbuf, index_y);\n            \n            var polar = cartopol(real[0], imaginary[0]); //convert to polar\n            specCentroid_data_array[index_x] = polar[0]; //mag\n            specCentroid_data_array[index_y] = polar[1]; //phase\n        }\n    }\n}\n\nfunction SpecCentroid_next() {\n    var outval = 0.0;\n    \n    if (needs_init) {\n        specCentroid_init(fftsize);\n        needs_init = 0;\n    }\n    \n    \n    //FFTAnalyser_GET_BUF //source\n    specCentroid_load_frame(fftsize);\n    \n    //SCPolarBuf* p = ToPolarApx(buf); //source (in specCentroid_load_frame() )\n\n    //GET_BINTOFREQ //source (in specCentroid_init() )\n    \n    //double num = sc_abs(p->nyq) * (numbins + 1); //source\n    var num = abs(specCentroid_data_array[1]) * (numbins + 1);\n    \n    //double denom = sc_abs(p->nyq); //source\n    var denom = abs(specCentroid_data_array[1]);\n\n    for (var i = 0; i < numbins; ++i) {\n        var index_bin_mag : Int = (2 * i) + 2; //bin mag values are even indeces starting at 2 (dc and nyq are 0 and 1) in 'specCentroid_data_array'\n        \n        //num += sc_abs(p->bin[i].mag) * (i + 1); //source\n        num += abs(specCentroid_data_array[index_bin_mag]) * (i + 1);\n        \n        //denom += sc_abs(p->bin[i].mag); //source\n        denom += abs(specCentroid_data_array[index_bin_mag]);\n    }\n\n    //ZOUT0(0) = unit->outval = denom == 0.0 ? 0.f : (float)(bintofreq * num / denom); //source\n    outval = denom == 0.0 ? 0.0 : (bintofreq * num / denom);\r\n\tout1 = outval;\n}\n\nSpecCentroid_next();\n",
+						"hot" : 0,
+						"safemath" : 1
 					}
 ,
 					"rnbo_serial" : 1,
@@ -1103,19 +1103,19 @@
 					"patching_rect" : [ 1261.0, 70.5, 209.0, 23.0 ],
 					"rnbo_classname" : "param",
 					"rnbo_extra_attributes" : 					{
-						"enum" : "",
-						"exponent" : 1.0,
-						"displayorder" : "-",
 						"preset" : 1,
-						"displayname" : "",
-						"sendinit" : 1,
-						"unit" : "",
-						"ctlin" : 0.0,
+						"displayorder" : "-",
 						"meta" : "",
+						"ctlin" : 0.0,
+						"fromnormalized" : "",
+						"sendinit" : 1,
+						"enum" : "",
 						"steps" : 0.0,
+						"displayname" : "",
+						"unit" : "",
 						"order" : "0",
-						"tonormalized" : "",
-						"fromnormalized" : ""
+						"exponent" : 1.0,
+						"tonormalized" : ""
 					}
 ,
 					"rnbo_serial" : 2,
@@ -1810,8 +1810,8 @@
 					"patching_rect" : [ 56.0, 96.0, 182.0, 23.0 ],
 					"rnbo_classname" : "fftstream~",
 					"rnbo_extra_attributes" : 					{
-						"win_bufname" : "RNBODefaultFftWindow",
-						"phase" : 0
+						"phase" : 0,
+						"win_bufname" : "RNBODefaultFftWindow"
 					}
 ,
 					"rnbo_serial" : 1,
@@ -1927,8 +1927,8 @@
 					"patching_rect" : [ 219.0, 821.0, 76.0, 23.0 ],
 					"rnbo_classname" : "number",
 					"rnbo_extra_attributes" : 					{
-						"maximum" : "<none>",
 						"minimum" : "<none>",
+						"maximum" : "<none>",
 						"preset" : 0,
 						"order" : "",
 						"initialFormat" : "float"
@@ -1950,8 +1950,8 @@
 					"patching_rect" : [ 127.0, 821.0, 50.0, 23.0 ],
 					"rnbo_classname" : "number",
 					"rnbo_extra_attributes" : 					{
-						"maximum" : "<none>",
 						"minimum" : "<none>",
+						"maximum" : "<none>",
 						"preset" : 0,
 						"order" : "",
 						"initialFormat" : "float"
@@ -1973,8 +1973,8 @@
 					"patching_rect" : [ 35.0, 821.0, 50.0, 23.0 ],
 					"rnbo_classname" : "number",
 					"rnbo_extra_attributes" : 					{
-						"maximum" : "<none>",
 						"minimum" : "<none>",
+						"maximum" : "<none>",
 						"preset" : 0,
 						"order" : "",
 						"initialFormat" : "float"
@@ -2010,9 +2010,9 @@
 					"patching_rect" : [ 35.0, 779.0, 224.0, 23.0 ],
 					"rnbo_classname" : "data",
 					"rnbo_extra_attributes" : 					{
-						"samplerate" : 0.0,
 						"file" : "",
 						"fill" : "",
+						"samplerate" : 0.0,
 						"type" : ""
 					}
 ,
