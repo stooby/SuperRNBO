@@ -40,7 +40,7 @@ const ods_absinvof_logof_log_lower_limit = 0.010414993;
 @param({min: 0.0, max: 1.0}) floor = 0.1;
 @state last_floor = 0.0;
 
-//mingap specifies a minimum gap (in FFT frames) between onset detections, a brute-force way to prevent too many doubled detections.
+//mingap specifies a minimum gap (in entire FFT buffer frames / Onsets_next() steps triggered by metro/bang polls of this RNBOscript object) between onset detections, a brute-force way to prevent too many doubled detections. (e.g. if Onset_next() is called every 1ms and mingap = 256, it'll take 256 ms for mingap to be decremented to 0)
 @param({min: 0, max: 256}) mingap = 10;
 @state last_mingap = 0;
 
@@ -295,7 +295,9 @@ function onsetsds_memneeded(odftype, fftsize, medspan) {
             //For each bin (NOT dc/nyq) we store mag
             post("odftype = mkl ---");
             return (medspan + medspan + fftsize + numbins + 2 + numbins);
-            //break; //not sure if necessary...
+        default:
+            post("odftype = INVALID!!! allocating max memory ---");
+            return (medspan + medspan + fftsize + numbins + 2 + numbins + numbins + numbins);
     }
 }
 
