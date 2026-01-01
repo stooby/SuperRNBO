@@ -1,16 +1,17 @@
 @param({min: 64, max: 2048}) fftsize = 64;
 //@state last_fftsize = 0; //<----not needed unless you want to log fftsize changes
+@state fftbuf_index : Int = 0; //track the last index to read from fftbuf (needed when I/O buffer size and fftbuf > fftsize)
+@state last_samplecount : Int = 0; //track last samplecount value to know when we've started a new I/O buffer
 
-@param({min: 0, max: 1}) needs_init = 1; //<----not sure if this is needed
+
+@param({min: 0, max: 1}) needs_init = 1; //only needed if fftsize changes after construction, but that's not likely to ever happen
 //@state last_needs_init = 0; //<----not needed unless you want to log needs_init changes
 
 @state numbins : Int = 0; // numbins is the fftsize bin count not including DC/nyq (fftsize / 2 - 1)
 @state oneovern = 0.0;
 
 const specFlat_data_array_size : Int = 2048; //max possible value of fftsize (buffer size)...
-//@state specFlat_data_array_size : Int = fftsize; //this would be the only ever value, but can't cast @param in this way in RNBO (causes error)
 @state specFlat_data_array = new FixedFloatArray(specFlat_data_array_size);
-
 
 @state fftbuf = new buffer("local:fftbuf_1"); //reference to data "fftbuf" object in RNBO patch
 
@@ -26,8 +27,7 @@ function specFlat_init(this_fftsize) {
 }
 
 //Load the current frame of FFT data into specFlat_data_array
-function specFlat_load_frame(this_fftsize) {
-    
+function specFlat_load_frame(this_fftsize, startIndex) {
     if (this_fftsize > specFlat_data_array_size) {
         //safeguard against writing out of bounds of onsetdetector_data_array
         this_fftsize = specFlat_data_array_size;
@@ -39,19 +39,22 @@ function specFlat_load_frame(this_fftsize) {
         if (i < 1) {
             //post("===========");
             //no conversion needed for these...
-            var dc = peek(fftbuf, 0);
-            var nyq = peek(fftbuf, 1);
+            var dc = peek(fftbuf, startIndex);
+            var nyq = peek(fftbuf, startIndex + 1);
             specFlat_data_array[0] = dc[0];
             specFlat_data_array[1] = nyq[0];
         }
         else if (i >= 1 && (i < this_fftsize/2)) {
-            var index_x : Int = 2 * i;
-            var index_y : Int = index_x + 1;
-            var real = peek(fftbuf, index_x);
-            var imaginary = peek(fftbuf, index_y);
+        	//using sda_index_x and sda_index_y to decouple specFlat_data_array write positions from fftbuf read positions via startIndex
+            var sda_index_x : Int = 2 * i;
+            var sda_index_y : Int = sda_index_x + 1;
+            var read_index_x : Int = sda_index_x + startIndex;
+            var read_index_y : Int = read_index_x + 1;
+            var real = peek(fftbuf, read_index_x);
+            var imaginary = peek(fftbuf, read_index_y);
             
-            specFlat_data_array[index_x] = real[0];
-            specFlat_data_array[index_y] = imaginary[0];
+            specFlat_data_array[sda_index_x] = real[0];
+            specFlat_data_array[sda_index_y] = imaginary[0];
         }
     }
 }
@@ -64,9 +67,16 @@ function SpecFlatness_next() {
         needs_init = 0;
     }
     
+    var samplecount : Int = samplecount(); //total # of samples elapsed since RNBO code was loaded, at the start of this audio buffer
+    //if we've started a new audio buffer, or we've incremented past the I/O buffer size, reset fftbuf_index (read index) to 0
+    if (samplecount != last_samplecount || fftbuf_index >= vectorsize()) {
+		fftbuf_index = 0;
+		last_samplecount = samplecount;
+	}
     
     //FFTAnalyser_GET_BUF //source
-    specFlat_load_frame(fftsize);
+    specFlat_load_frame(fftsize, fftbuf_index);
+    fftbuf_index += fftsize; //increment fftbuf_index by fftsize (to handle cases when fftsize != I/O vector size)
     
     //if (unit->m_oneovern == 0.) unit->m_oneovern = 1. / (numbins + 2); //source
     //I decided to set oneovern once in specFlat_init() instead b/c it's always going to be the same due to fftsize never changing (fftsize set on construction)
@@ -113,7 +123,7 @@ function SpecFlatness_next() {
     // Here, for silence we instead output an empirical value based on very quiet white noise.
 
     //ZOUT0(0) = unit->outval; //source
-    out1 = outval; //source
+    out1 = outval;
 }
 
 SpecFlatness_next();

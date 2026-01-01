@@ -1,7 +1,9 @@
 @param({min: 64, max: 2048}) fftsize = 64;
 //@state last_fftsize = 0; //<----not needed unless you want to log fftsize changes
+@state fftbuf_index : Int = 0; //track the last index to read from fftbuf (needed when I/O buffer size and fftbuf > fftsize)
+@state last_samplecount : Int = 0; //track last samplecount value to know when we've started a new I/O buffer
 
-@param({min: 0, max: 1}) needs_init = 1;
+@param({min: 0, max: 1}) needs_init = 1; //only needed if fftsize changes after construction, but that's not likely to ever happen
 //@state last_needs_init = 0; //<----not needed unless you want to log needs_init changes
 
 @state numbins : Int = 0; // numbins is the fftsize bin count not including DC/nyq (fftsize / 2 - 1)
@@ -33,8 +35,7 @@ function specCentroid_init(this_fftsize) {
 }
 
 //Load the current frame of FFT data into specCentroid_data_array
-function specCentroid_load_frame(this_fftsize) {
-    
+function specCentroid_load_frame(this_fftsize, startIndex) {
     if (this_fftsize > specCentroid_data_array_size) {
         //safeguard against writing out of bounds of specCentroid_data_array
         this_fftsize = specCentroid_data_array_size;
@@ -47,20 +48,23 @@ function specCentroid_load_frame(this_fftsize) {
         if (i < 1) {
             //post("===========");
             //no conversion needed for these...
-            var dc = peek(fftbuf, 0);
-            var nyq = peek(fftbuf, 1);
+            var dc = peek(fftbuf, startIndex);
+            var nyq = peek(fftbuf, startIndex + 1);
             specCentroid_data_array[0] = dc[0];
             specCentroid_data_array[1] = nyq[0];
         }
         else if (i >= 1 && (i < this_fftsize/2)) {
-            var index_x : Int = 2 * i;
-            var index_y : Int = index_x + 1;
-            var real = peek(fftbuf, index_x);
-            var imaginary = peek(fftbuf, index_y);
+        	//using sda_index_x and sda_index_y to decouple specFlat_data_array write positions from fftbuf read positions via startIndex
+            var sda_index_x : Int = 2 * i;
+            var sda_index_y : Int = sda_index_x + 1;
+            var read_index_x : Int = sda_index_x + startIndex;
+            var read_index_y : Int = read_index_x + 1;
+            var real = peek(fftbuf, read_index_x);
+            var imaginary = peek(fftbuf, read_index_y);
             
             var polar = cartopol(real[0], imaginary[0]); //convert to polar
-            specCentroid_data_array[index_x] = polar[0]; //mag
-            specCentroid_data_array[index_y] = polar[1]; //phase
+            specCentroid_data_array[sda_index_x] = polar[0]; //mag
+            specCentroid_data_array[sda_index_y] = polar[1]; //phase
         }
     }
 }
@@ -73,9 +77,16 @@ function SpecCentroid_next() {
         needs_init = 0;
     }
     
+    var samplecount : Int = samplecount(); //total # of samples elapsed since RNBO code was loaded, at the start of this audio buffer
+    //if we've started a new audio buffer, or we've incremented past the I/O buffer size, reset fftbuf_index (read index) to 0
+    if (samplecount != last_samplecount || fftbuf_index >= vectorsize()) {
+		fftbuf_index = 0;
+		last_samplecount = samplecount;
+	}
     
     //FFTAnalyser_GET_BUF //source
-    specCentroid_load_frame(fftsize);
+    specCentroid_load_frame(fftsize, fftbuf_index);
+    fftbuf_index += fftsize; //increment fftbuf_index by fftsize (to handle cases when fftsize != I/O vector size)
     
     //SCPolarBuf* p = ToPolarApx(buf); //source (in specCentroid_load_frame() )
 

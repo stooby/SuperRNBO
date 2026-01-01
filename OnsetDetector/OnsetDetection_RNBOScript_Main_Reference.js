@@ -23,7 +23,6 @@ const ods_absinvof_logof_log_lower_limit = 0.010414993;
 // Constants
 
 //Onsets.kr(chain, threshold: 0.5, odftype: 'rcomplex', relaxtime: 1, floor: 0.1, mingap: 10, medianspan: 11, whtype: 1, rawodf: 0)
-//not sure if I need to make parameter for rawodf (probably not)
 
 
 //Threshold (of ODF value, after median processing) for detection. typically between 0 and 1, although in rare cases you may find values outside this range useful.
@@ -104,6 +103,8 @@ enum onsetsds_wh_types {
 
 @param({min: 64, max: 2048}) fftsize = 64;
 @state last_fftsize = 0;
+@state fftbuf_index : Int = 0; //track the last index to read from fftbuf (needed when I/O buffer size and fftbuf > fftsize)
+@state last_samplecount : Int = 0; //track last samplecount value to know when we've started a new I/O buffer
 
 @param({min: 0, max: 1}) needs_init = 1; //for use in Onsets_next() - translated from Onsets.cpp
 @state last_needs_init = 0;
@@ -807,27 +808,30 @@ function onsetsds_detect() {
     }
 }
 
-//Load the current frame of FFT data into onsetdetector_data_array
-function onsetsds_loadframe(this_fftsize) {
+//Load one buffer of FFT data from startIndex in fftbuf into onsetdetector_data_array (handling cases where fftsize != I/O buffer size)
+function onsetsds_loadframe(this_fftsize, startIndex) {
     //store all fftbuf data in onsetdetector_data_array and convert to polar...
     for (var i : Int = 0; i < this_fftsize/2; i++) {
         if (i < 1) {
             //post("===========");
             //no polar conversion needed for these...
-            var dc = peek(fftbuf, 0);
-            var nyq = peek(fftbuf, 1);
+            var dc = peek(fftbuf, startIndex);
+            var nyq = peek(fftbuf, startIndex + 1);
             onsetdetector_data_array[0] = dc[0];
             onsetdetector_data_array[1] = nyq[0];
         }
         else if (i >= 1 && (i < this_fftsize/2)) {
-            var index_x : Int = 2 * i;
-            var index_y : Int = index_x + 1;
-            var real = peek(fftbuf, index_x);
-            var imaginary = peek(fftbuf, index_y);
+        	//using od_index_x and od_index_y to decouple onsetdetector_data_array write positions from fftbuf read positions via startIndex
+        	var od_index_x : Int = 2 * i;
+        	var od_index_y : Int = od_index_x + 1;
+            var read_index_x : Int = od_index_x + startIndex;
+            var read_index_y : Int = read_index_x + 1;
+            var real = peek(fftbuf, read_index_x);
+            var imaginary = peek(fftbuf, read_index_y);
             
             var polar = cartopol(real[0], imaginary[0]);
-            onsetdetector_data_array[index_x] = polar[0]; //mag
-            onsetdetector_data_array[index_y] = polar[1]; //phase
+            onsetdetector_data_array[od_index_x] = polar[0]; //mag
+            onsetdetector_data_array[od_index_y] = polar[1]; //phase
         }
     }
 }
@@ -843,15 +847,17 @@ function onsetsds_loadframe(this_fftsize) {
  */
 //bool onsetsds_process(OnsetsDS* ods, float* fftbuf) {//source
 function onsetsds_process() {
-    onsetsds_loadframe(fftsize);
-
-    onsetsds_whiten(); //<---CAUSES warning: 3755:1:non-void function does not return a value in all control paths
-                        //error: 3883:9:non-void function 'codebox_02_onsetsds_whiten' should return a value
+	var samplecount : Int = samplecount(); //total # of samples elapsed since RNBO code was loaded, at the start of this audio buffer
+	//if we've started a new audio buffer, or we've incremented past the I/O buffer size, reset fftbuf_index (read index) to 0
+	if (samplecount != last_samplecount || fftbuf_index >= vectorsize()) {
+		fftbuf_index = 0;
+		last_samplecount = samplecount;
+	}
+    onsetsds_loadframe(fftsize, fftbuf_index);
+    onsetsds_whiten();               
     onsetsds_odf();
     onsetsds_detect();
-
-    //return ods->detected; //source
-    //return detected; //<---I think this should be fine in RNBO, but try commenting this out if run into issues, since 'detected' is a @state variable and accessible always
+    fftbuf_index += fftsize; //increment fftbuf_index by fftsize (to handle cases when fftsize != I/O vector size)
 }
 
 
@@ -899,7 +905,6 @@ function Onsets_next() {
     if (detected > 0) {post("ONSET DETECTED");}
     //ZOUT0(0) = unit->outval;
     out1 = detected;
-    //out1 = detected;
 }
 
 //===============================
