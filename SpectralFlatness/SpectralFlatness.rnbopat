@@ -4,7 +4,7 @@
         "appversion": {
             "major": 9,
             "minor": 1,
-            "revision": 1,
+            "revision": 2,
             "architecture": "x64",
             "modernui": 1
         },
@@ -33,8 +33,8 @@
                     "patching_rect": [ 1423.1111056804657, 444.0, 36.0, 23.0 ],
                     "rnbo_classname": "out",
                     "rnbo_extra_attributes": {
-                        "meta": "",
-                        "comment": "Poll Delay (ms)"
+                        "comment": "Poll Delay (ms)",
+                        "meta": ""
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "out_obj-34",
@@ -115,11 +115,11 @@
                     "patching_rect": [ 1366.1818172931671, 380.5, 74.74747109413147, 23.0 ],
                     "rnbo_classname": "number",
                     "rnbo_extra_attributes": {
-                        "minimum": "<none>",
-                        "initialFormat": "float",
                         "preset": 0,
-                        "maximum": "<none>",
-                        "order": ""
+                        "minimum": "<none>",
+                        "order": "",
+                        "initialFormat": "float",
+                        "maximum": "<none>"
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "number_obj-31"
@@ -171,9 +171,9 @@
                     "patching_rect": [ 1366.1818172931671, 285.0, 92.92928838729858, 23.0 ],
                     "rnbo_classname": "number~",
                     "rnbo_extra_attributes": {
-                        "displaymode": "first",
+                        "initialMode": "monitor",
                         "interval": 100.0,
-                        "initialMode": "monitor"
+                        "displaymode": "first"
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "number~_obj-27",
@@ -286,11 +286,11 @@
                     "patching_rect": [ 843.0, 405.0, 74.74747109413147, 23.0 ],
                     "rnbo_classname": "number",
                     "rnbo_extra_attributes": {
-                        "minimum": "<none>",
-                        "initialFormat": "float",
                         "preset": 0,
-                        "maximum": "<none>",
-                        "order": ""
+                        "minimum": "<none>",
+                        "order": "",
+                        "initialFormat": "float",
+                        "maximum": "<none>"
                     },
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "number_obj-18"
@@ -328,9 +328,9 @@
                     "patching_rect": [ 872.0, 330.0, 92.92928838729858, 23.0 ],
                     "rnbo_classname": "number~",
                     "rnbo_extra_attributes": {
-                        "displaymode": "first",
+                        "initialMode": "monitor",
                         "interval": 100.0,
-                        "initialMode": "monitor"
+                        "displaymode": "first"
                     },
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "number~_obj-21",
@@ -339,7 +339,7 @@
             },
             {
                 "box": {
-                    "code": "@param({min: 64, max: 2048}) fftsize = 64;\r\nvar samplerate = samplerate();\r\nvar vectorsize = vectorsize();\r\nvar msPerBuffer = (fftsize/samplerate) * 1000;\r\n//post(\"buffersize = \", buffersize, \" | samplerate = \", samplerate, \" | vectorsize/samplerate = \", msPerBuffer);\r\nvar input = in1; //have to create dummy input to allow fftsize param to be set via messages\r\n\r\n//see comment in patch to right about why we set pollDelay like below...\r\n//var pollDelay = msPerBuffer * 3; //works well\r\nvar pollDelay = msPerBuffer * 2.5; //works well, a little lower latency\r\n\r\nif (vectorsize() == 1024) {\r\n    pollDelay = (1024/samplerate) * 1000 * 3.5;\r\n    //pollDelay = msPerBuffer * 3.5; //good (if fftsize = 1024, but not if 512)\r\n}\r\nelse if (vectorsize() > 1024) {\r\n    //pollDelay = 86;\r\n    pollDelay = (((2048/samplerate) * 1000) * 2) + 1;\r\n}\r\nelse {\r\n    if (pollDelay < 42) {//works\r\n        pollDelay = 62;\r\n    }\r\n}\r\nout1 = msPerBuffer;\r\nout2 = pollDelay;",
+                    "code": "@param({min: 64, max: 2048}) fftsize = 64;\r\nvar samplerate = samplerate();\r\nvar vectorsize = vectorsize();\r\nvar msPerBuffer = (fftsize/samplerate) * 1000;\r\n//post(\"buffersize = \", buffersize, \" | samplerate = \", samplerate, \" | vectorsize/samplerate = \", msPerBuffer);\r\nvar input = in1; //have to create dummy input to allow fftsize param to be set via messages\r\n\r\n//see comment in patch to right about why we set pollDelay like below...\r\nvar pollDelay = 0;\r\n\r\nif (samplerate > 48000) {\r\n    samplerate *= 0.5; //double pollDelay latency calculations w/ high SRs to ensure timing parity w/ lower SRs and more accurate results\r\n}\r\n\r\nif (vectorsize <= 64) {\r\n    //pollDelay = 8; //works @ 32 & 64 vectorsize (48k SR)\r\n    pollDelay = floor(((64/samplerate)*6000)+1); //supports 44k and 48k w/ similar output\r\n}\r\nelse if (vectorsize == 128) {\r\n    //pollDelay = 11; //works @ 128 vectorsize (48k SR)\r\n    pollDelay = floor(((vectorsize/samplerate)*4000)+1); //supports 44k and 48k w/ similar output\r\n}\r\nelse if (vectorsize == 256) {\r\n    //pollDelay = 16; //works @ 256 vectorsize (48k SR)\r\n    pollDelay = floor(((vectorsize/samplerate)*3000)+1); //supports 44k and 48k w/ similar output\r\n}\r\nelse if (vectorsize >= 512) {\r\n    //pollDelay = 22; //works @ 512 vectorsize (48k SR)\r\n    //pollDelay = 43; //works @ 1024 vectorsize (48k SR)\r\n    //pollDelay = 86; //works @ 2048 vectorsize (48k SR)\r\n    pollDelay = floor(((vectorsize/samplerate)*2000)+1); //supports 44k, 48k, 96k w/ similar output\r\n}\r\n\r\nout1 = msPerBuffer;\r\nout2 = pollDelay;",
                     "fontface": 0,
                     "fontname": "<Monospaced>",
                     "fontsize": 12.0,
@@ -351,12 +351,12 @@
                     "patching_rect": [ 843.0, 105.0, 460.0, 203.0 ],
                     "rnbo_classname": "codebox~",
                     "rnbo_extra_attributes": {
-                        "safemath": 1,
-                        "code": "@param({min: 64, max: 2048}) fftsize = 64;\r\nvar samplerate = samplerate();\r\nvar vectorsize = vectorsize();\r\nvar msPerBuffer = (fftsize/samplerate) * 1000;\r\n//post(\"buffersize = \", buffersize, \" | samplerate = \", samplerate, \" | vectorsize/samplerate = \", msPerBuffer);\r\nvar input = in1; //have to create dummy input to allow fftsize param to be set via messages\r\n\r\n//see comment in patch to right about why we set pollDelay like below...\r\n//var pollDelay = msPerBuffer * 3; //works well\r\nvar pollDelay = msPerBuffer * 2.5; //works well, a little lower latency\r\n\r\nif (vectorsize() == 1024) {\r\n    pollDelay = (1024/samplerate) * 1000 * 3.5;\r\n    //pollDelay = msPerBuffer * 3.5; //good (if fftsize = 1024, but not if 512)\r\n}\r\nelse if (vectorsize() > 1024) {\r\n    //pollDelay = 86;\r\n    pollDelay = (((2048/samplerate) * 1000) * 2) + 1;\r\n}\r\nelse {\r\n    if (pollDelay < 42) {//works\r\n        pollDelay = 62;\r\n    }\r\n}\r\nout1 = msPerBuffer;\r\nout2 = pollDelay;",
+                        "nocache": 0,
+                        "code": "@param({min: 64, max: 2048}) fftsize = 64;\r\nvar samplerate = samplerate();\r\nvar vectorsize = vectorsize();\r\nvar msPerBuffer = (fftsize/samplerate) * 1000;\r\n//post(\"buffersize = \", buffersize, \" | samplerate = \", samplerate, \" | vectorsize/samplerate = \", msPerBuffer);\r\nvar input = in1; //have to create dummy input to allow fftsize param to be set via messages\r\n\r\n//see comment in patch to right about why we set pollDelay like below...\r\nvar pollDelay = 0;\r\n\r\nif (samplerate > 48000) {\r\n    samplerate *= 0.5; //double pollDelay latency calculations w/ high SRs to ensure timing parity w/ lower SRs and more accurate results\r\n}\r\n\r\nif (vectorsize <= 64) {\r\n    //pollDelay = 8; //works @ 32 & 64 vectorsize (48k SR)\r\n    pollDelay = floor(((64/samplerate)*6000)+1); //supports 44k and 48k w/ similar output\r\n}\r\nelse if (vectorsize == 128) {\r\n    //pollDelay = 11; //works @ 128 vectorsize (48k SR)\r\n    pollDelay = floor(((vectorsize/samplerate)*4000)+1); //supports 44k and 48k w/ similar output\r\n}\r\nelse if (vectorsize == 256) {\r\n    //pollDelay = 16; //works @ 256 vectorsize (48k SR)\r\n    pollDelay = floor(((vectorsize/samplerate)*3000)+1); //supports 44k and 48k w/ similar output\r\n}\r\nelse if (vectorsize >= 512) {\r\n    //pollDelay = 22; //works @ 512 vectorsize (48k SR)\r\n    //pollDelay = 43; //works @ 1024 vectorsize (48k SR)\r\n    //pollDelay = 86; //works @ 2048 vectorsize (48k SR)\r\n    pollDelay = floor(((vectorsize/samplerate)*2000)+1); //supports 44k, 48k, 96k w/ similar output\r\n}\r\n\r\nout1 = msPerBuffer;\r\nout2 = pollDelay;",
                         "expr": "",
-                        "nocache": 0
+                        "safemath": 1
                     },
-                    "rnbo_serial": 4,
+                    "rnbo_serial": 57,
                     "rnbo_uniqueid": "codebox~_obj-23",
                     "rnboinfo": {
                         "needsInstanceInfo": 1,
@@ -604,8 +604,8 @@
                     "patching_rect": [ 1323.0, 355.0, 28.0, 23.0 ],
                     "rnbo_classname": "in",
                     "rnbo_extra_attributes": {
-                        "meta": "",
-                        "comment": "Poll (Once)"
+                        "comment": "Poll (Once)",
+                        "meta": ""
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "in_obj-12",
@@ -758,19 +758,19 @@
                     "patching_rect": [ 1104.0, 416.0, 195.0, 23.0 ],
                     "rnbo_classname": "param",
                     "rnbo_extra_attributes": {
-                        "displayname": "",
-                        "tonormalized": "",
-                        "exponent": 1.0,
-                        "displayorder": "-",
-                        "meta": "",
                         "preset": 1,
                         "sendinit": 1,
-                        "enum": "",
-                        "unit": "",
+                        "meta": "",
+                        "displayname": "",
+                        "displayorder": "-",
                         "fromnormalized": "",
-                        "steps": 0.0,
+                        "exponent": 1.0,
+                        "enum": "",
+                        "ctlin": 0.0,
+                        "unit": "",
+                        "tonormalized": "",
                         "order": "0",
-                        "ctlin": 0.0
+                        "steps": 0.0
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "needs_init",
@@ -1176,8 +1176,8 @@
                     "patching_rect": [ 1106.0, 346.0, 28.0, 23.0 ],
                     "rnbo_classname": "in",
                     "rnbo_extra_attributes": {
-                        "meta": "",
-                        "comment": "Reset"
+                        "comment": "Reset",
+                        "meta": ""
                     },
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "in_obj-69",
@@ -1257,11 +1257,11 @@
                     "patching_rect": [ 937.0, 1047.0, 50.0, 23.0 ],
                     "rnbo_classname": "number",
                     "rnbo_extra_attributes": {
-                        "minimum": "<none>",
-                        "initialFormat": "float",
                         "preset": 0,
-                        "maximum": "<none>",
-                        "order": ""
+                        "minimum": "<none>",
+                        "order": "",
+                        "initialFormat": "float",
+                        "maximum": "<none>"
                     },
                     "rnbo_serial": 3,
                     "rnbo_uniqueid": "number_obj-9"
@@ -1276,8 +1276,8 @@
                     "patching_rect": [ 889.0, 1047.0, 36.0, 23.0 ],
                     "rnbo_classname": "out",
                     "rnbo_extra_attributes": {
-                        "meta": "",
-                        "comment": ""
+                        "comment": "",
+                        "meta": ""
                     },
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "out_obj-8",
@@ -1370,10 +1370,10 @@
                     "patching_rect": [ 900.0, 533.0, 641.0, 478.0 ],
                     "rnbo_classname": "codebox",
                     "rnbo_extra_attributes": {
-                        "hot": 0,
-                        "safemath": 1,
+                        "nocache": 0,
                         "code": "@param({min: 64, max: 2048}) fftsize = 64;\n//@state last_fftsize = 0; //<----not needed unless you want to log fftsize changes\n@state fftbuf_index : Int = 0; //track the last index to read from fftbuf (needed when I/O buffer size and fftbuf > fftsize)\n@state last_samplecount : Int = 0; //track last samplecount value to know when we've started a new I/O buffer\n\n\n@param({min: 0, max: 1}) needs_init = 1; //only needed if fftsize changes after construction, but that's not likely to ever happen\n//@state last_needs_init = 0; //<----not needed unless you want to log needs_init changes\n\n@state numbins : Int = 0; // numbins is the fftsize bin count not including DC/nyq (fftsize / 2 - 1)\n@state oneovern = 0.0;\n\nconst specFlat_data_array_size : Int = 2048; //max possible value of fftsize (buffer size)...\n@state specFlat_data_array = new FixedFloatArray(specFlat_data_array_size);\n\n@state fftbuf = new buffer(\"local:fftbuf_1\"); //reference to data \"fftbuf\" object in RNBO patch\n\nfunction specFlat_init(this_fftsize) {\n    for (var i = 0; i < specFlat_data_array_size; i++) {\n        specFlat_data_array[i] = 0.0; //0 out data array\n    }\n    \n    //int numbins = (buf->samples - 2) >> 1; //source FFTAnalyser_GET_BUF\n    numbins = (this_fftsize - 2) >> 1; //(fftsize / 2 - 1)\n    //oneovern = 0.0; //from SpecFlatness_Ctor\n    oneovern = 1.0 / (numbins + 2);\n}\n\n//Load the current frame of FFT data into specFlat_data_array\nfunction specFlat_load_frame(this_fftsize, startIndex) {\n    \n    if (this_fftsize > specFlat_data_array_size) {\n        //safeguard against writing out of bounds of onsetdetector_data_array\n        this_fftsize = specFlat_data_array_size;\n        post(\"WARNING!!! fftsize was set to value > specFlat_data_array_size\");\n        post(\"fftsize now = specFlat_data_array_size to avoid crash\");\n    }\n    //store all fftbuf data in specFlat_data_array...\n    for (var i : Int = 0; i < this_fftsize/2; i++) {\n        if (i < 1) {\n            //post(\"===========\");\n            //no conversion needed for these...\n            var dc = peek(fftbuf, startIndex);\n            var nyq = peek(fftbuf, startIndex + 1);\n            specFlat_data_array[0] = dc[0];\n            specFlat_data_array[1] = nyq[0];\n        }\n        else if (i >= 1 && (i < this_fftsize/2)) {\n        \t//using sda_index_x and sda_index_y to decouple specFlat_data_array write positions from fftbuf read positions via startIndex\n            var sda_index_x : Int = 2 * i;\n            var sda_index_y : Int = sda_index_x + 1;\n            var read_index_x : Int = sda_index_x + startIndex;\n            var read_index_y : Int = read_index_x + 1;\n            var real = peek(fftbuf, read_index_x);\n            var imaginary = peek(fftbuf, read_index_y);\n            \n            specFlat_data_array[sda_index_x] = real[0];\n            specFlat_data_array[sda_index_y] = imaginary[0];\n        }\n    }\n}\n\nfunction SpecFlatness_next() {\n    var outval = 0.0;\n    \n    if (needs_init) {\n        specFlat_init(fftsize);\n        needs_init = 0;\n    }\n    \n    var samplecount : Int = samplecount(); //total # of samples elapsed since RNBO code was loaded, at the start of this audio buffer\n    //if we've started a new audio buffer, or we've incremented past the I/O buffer size, reset fftbuf_index (read index) to 0\n    if (samplecount != last_samplecount || fftbuf_index >= vectorsize()) {\n\t\tfftbuf_index = 0;\n\t\tlast_samplecount = samplecount;\n\t}\n    \n    //FFTAnalyser_GET_BUF //source\n    specFlat_load_frame(fftsize, fftbuf_index);\n    fftbuf_index += fftsize; //increment fftbuf_index by fftsize (to handle cases when fftsize != I/O vector size)\n    \n    //if (unit->m_oneovern == 0.) unit->m_oneovern = 1. / (numbins + 2); //source\n    //I decided to set oneovern once in specFlat_init() instead b/c it's always going to be the same due to fftsize never changing (fftsize set on construction)\n\n    //SCComplexBuf* p = ToComplexApx(buf); //source (no complex conversion needed b/c fftbuf values are already in complex format...)\n\n    // Spectral Flatness Measure is geometric mean divided by arithmetic mean.\n    //\n    // In order to calculate geom mean without hitting the precision limit,\n    //  we use the trick of converting to log, taking the average, then converting back from log.\n    //double geommean = std::log(sc_abs(p->dc)) + std::log(sc_abs(p->nyq)); //source\n    var geommean = log(abs(specFlat_data_array[0])) + log(abs(specFlat_data_array[1]));\n    \n    //double mean = sc_abs(p->dc) + sc_abs(p->nyq); //source\n    var mean = abs(specFlat_data_array[0]) + abs(specFlat_data_array[1]);\n\n    for (var i = 0; i < numbins; ++i) {\n        var index_bin_real : Int = (2 * i) + 2; //bin real values are even indeces starting at 2 (dc and nyq are 0 and 1) in 'specFlat_data_array'\n        var index_bin_imag : Int = (2 * i) + 3; //bin imaginary values are odd indeces starting at 3 (dc, nyq, and real[0] are 0, 1, and 2) in 'specFlat_data_array')\n        \n        //float rabs = (p->bin[i].real); //source\n        var real = specFlat_data_array[index_bin_real];\n        \n        //float iabs = (p->bin[i].imag); //source\n        var imag = specFlat_data_array[index_bin_imag];\n        \n        //float amp = std::sqrt((rabs * rabs) + (iabs * iabs)); //source\n        var amp = safesqrt((real * real) + (imag * imag));\n        \n        if (amp != 0.0) { // zeroes lead to NaNs\n            geommean += log(amp);\n            mean += amp;\n        }\n    }\n\n    //double oneovern = unit->m_oneovern; //source (no need b/c using @state oneovern)\n    geommean = exp(geommean * oneovern); // Average and then convert back to linear (source)\n    mean *= oneovern; //source\n\n    // Store the val for output in future calls\n    //unit->outval = (mean == 0.f ? 0.8f : (geommean / mean)); //source\n    outval = (mean == 0.0 ? 0.8 : (geommean / mean));\n    // Note: for silence the value is undefined.\n    // Here, for silence we instead output an empirical value based on very quiet white noise.\n\n    //ZOUT0(0) = unit->outval; //source\n    out1 = outval;\n}\n\nSpecFlatness_next();\n",
-                        "nocache": 0
+                        "hot": 0,
+                        "safemath": 1
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "codebox_obj-6",
@@ -1533,8 +1533,8 @@
                     "patching_rect": [ 771.0, 333.0, 28.0, 23.0 ],
                     "rnbo_classname": "in",
                     "rnbo_extra_attributes": {
-                        "meta": "",
-                        "comment": "Enable (Continuous I/O)"
+                        "comment": "Enable (Continuous I/O)",
+                        "meta": ""
                     },
                     "rnbo_serial": 3,
                     "rnbo_uniqueid": "in_obj-68",
@@ -1648,19 +1648,19 @@
                     "patching_rect": [ 1640.0, 377.0, 209.0, 23.0 ],
                     "rnbo_classname": "param",
                     "rnbo_extra_attributes": {
-                        "displayname": "",
-                        "tonormalized": "",
-                        "exponent": 1.0,
-                        "displayorder": "-",
-                        "meta": "",
                         "preset": 1,
                         "sendinit": 1,
-                        "enum": "",
-                        "unit": "",
+                        "meta": "",
+                        "displayname": "",
+                        "displayorder": "-",
                         "fromnormalized": "",
-                        "steps": 0.0,
+                        "exponent": 1.0,
+                        "enum": "",
+                        "ctlin": 0.0,
+                        "unit": "",
+                        "tonormalized": "",
                         "order": "0",
-                        "ctlin": 0.0
+                        "steps": 0.0
                     },
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "fftsize",
@@ -2149,8 +2149,8 @@
                     "patching_rect": [ 400.0, 839.0, 50.0, 23.0 ],
                     "rnbo_classname": "message",
                     "rnbo_extra_attributes": {
-                        "storeempty": 0,
-                        "text": ""
+                        "text": "",
+                        "storeempty": 0
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "message_obj-2",
@@ -2171,10 +2171,10 @@
                     "patching_rect": [ 400.0, 699.0, 317.0, 109.0 ],
                     "rnbo_classname": "codebox",
                     "rnbo_extra_attributes": {
-                        "hot": 0,
-                        "safemath": 1,
+                        "nocache": 0,
                         "code": "var fftsize : Int = 2048;\r\nvar numbins : Int = 0;\r\nnumbins = (fftsize - 2) >> 1;\r\nout1 = numbins;",
-                        "nocache": 0
+                        "hot": 0,
+                        "safemath": 1
                     },
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "codebox_obj-1",
@@ -2381,10 +2381,10 @@
                     "patching_rect": [ 56.0, 179.0, 575.0, 456.0 ],
                     "rnbo_classname": "codebox~",
                     "rnbo_extra_attributes": {
-                        "safemath": 1,
+                        "nocache": 0,
                         "code": "//copy fftstream data of current buffer to fftbuf\n//and translate it to be compatible with SC FFT format\n//dc | nyq | bin1 (r) | bin 1 (i) | bin2 (r) | bin2 (i) ...\n\n@param fftsize = 64;\n@state last_fftsize = 0;\n@state fftbuf = new buffer(\"local:fftbuf_1\"); //reference to data \"fftbuf\" object in RNBO patch\n\n@state write_index : Int = 0; //from 0 to (vectorsize() - 1)\n@state index_offset : Int = 0; //increments by fftsize each time fft_index wraps around back to 0\n@state reset_write_index : Int = 0;\n\nconst enable_test : Int = 0;\nconst enable_logs : Int = 0;\nconst max_log_posts : Int = 256;\n@state log_counter : Int = 0;\n\nvar real = in1;\nvar imaginary = in2;\nvar fft_index = intnum(in3);\nvar write_to_fftbuf = intnum(in4);\n\nvar testval : number;\n\n\nfunction dspsetup() {\n    bufferclear(fftbuf);\n    write_index = 0;\n    index_offset = 0;\n}\n\n\nif (!(last_fftsize == fftsize)) {\n\tif (enable_logs) {\n\t\tpost(\"[fftstream-converter~] --> NEW FFTSIZE = \", fftsize);\n    \tpost(\"[fftstream-converter~] --> LAST FFTSIZE = \", last_fftsize);\n\t}\n    last_fftsize = fftsize;\n    reset_write_index = 1;\n}\n\n\nif (write_to_fftbuf) {\n    //if write_to_fftbuf is enabled and then disabled, reset write_index to 0\n    if (reset_write_index) {\n        reset_write_index = 0;\n        write_index = 0;\n        index_offset = 0;\n        log_counter = 0;\n        if (enable_logs) {\n            post(\"[fft-convert~] write_index reset to 0 ------\");\n            post(\"[fft-convert~] log_counter reset to 0 ------\");\n        }\n    }\n    \n    //fft_index isn't guaranteed to always start at 0 (like when I/O buffer size < fftsize), so handle this case and align write_index w/ current fft_index\n    if (write_index == 0 && fft_index != 0) {\n    \tif (enable_logs && log_counter < max_log_posts) {\n    \t\tpost(\"[fft-convert~] fft_index out of sync w/ write_index! | write_index = 0 | fft_index = \", fft_index);\n    \t}\n        continue; //skip samples until write_index becomes in sync w/ fft_index again (since this I/O cycle started in the middle of fftstream processing and we've missed some samples/freq bins)\n    }\n    \n    if (enable_test) {testval = fft_index;} //test\n    \n    if (fft_index < 1) {//dc\n        if (enable_test) {\n            testval = 123456;\n            poke(fftbuf, testval, write_index); //test\n        }\n        else {\n            poke(fftbuf, in1, write_index); //copy real\n        }\n        \n        if (vectorsize() > fftsize) {//if I/O buffersize > fftsize\n            index_offset = write_index; //increment index_offset each fft_index wrap around (0, 64, 128, 192, 256, etc.)\n        }\n    }\n    else if (fft_index >= 1 && fft_index < fftsize/2) {\n        var index_x : Int = (fft_index * 2) + index_offset;\n\t\tvar index_y : Int = index_x + 1;\n\t\t\n\t\tif (enable_test) {\n\t\t\tvar testval2 : number = testval + 0.1;\n\t\t\tpoke(fftbuf, testval, index_x); //test\n\t\t\tpoke(fftbuf, testval2, index_y); //test\n\t\t}\n\t\telse {\n\t\t\tpoke(fftbuf, in1, index_x); //copy real\n\t\t\tpoke(fftbuf, in2, index_y); //copy imaginary\n\t\t}\n    }\n    else if (fft_index == fftsize/2) {//nyquist\n        if (enable_test) {\n\t\t\tpoke(fftbuf, testval, (index_offset + 1)); //test\n\t\t}\n\t\telse {\n\t\t\tpoke(fftbuf, in1, (index_offset + 1)); //copy real (put in SC's fft format's expected bin: 0-index + 1)\n\t\t}\n    }\n    \n    if (enable_logs) {\n        if (log_counter < max_log_posts) {\n            if (log_counter == 0) {\n                post(\"[fft-convert~] write_index | fft_index | index_offset | log_counter\");\n            }\n        \tpost(\"[fft-convert~] \", write_index, fft_index, index_offset, log_counter);\n            log_counter++;\n        }\n    }\n    \n    //increment write_index each sample\n    write_index++;\n    \n    if (vectorsize() >= fftsize) {\n    \t// reset write_index to 0 at the start of each new I/O buffer (when I/O buffer >= fftsize)\n    \tif (write_index >= vectorsize()) {\n        \twrite_index = 0;\n    \t}\n    }\n    else {\n    \t//if I/O buffer size < fftsize, reset write_index to 0 if it's >= fftsize\n    \tif (write_index >= fftsize) {\n        \twrite_index = 0;\n    \t}\n    }\n}\nelse {//write_to_fftbuf disabled \n    if (reset_write_index == 0) {\n        reset_write_index = 1; //ensure we reset the write_index to 0 the next time write_to_fftbuf is enabled\n    }\n}\n",
                         "expr": "",
-                        "nocache": 0
+                        "safemath": 1
                     },
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "codebox~_obj-32",
@@ -2554,8 +2554,8 @@
                     "patching_rect": [ 56.0, 96.0, 182.0, 23.0 ],
                     "rnbo_classname": "fftstream~",
                     "rnbo_extra_attributes": {
-                        "win_bufname": "RNBODefaultFftWindow",
-                        "phase": 0
+                        "phase": 0,
+                        "win_bufname": "RNBODefaultFftWindow"
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "fftstream~_obj-11",
@@ -2572,8 +2572,8 @@
                     "patching_rect": [ 56.0, 26.0, 35.0, 23.0 ],
                     "rnbo_classname": "in~",
                     "rnbo_extra_attributes": {
-                        "meta": "",
-                        "comment": ""
+                        "comment": "",
+                        "meta": ""
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "in~_obj-3",
@@ -2666,11 +2666,11 @@
                     "patching_rect": [ 219.0, 821.0, 76.0, 23.0 ],
                     "rnbo_classname": "number",
                     "rnbo_extra_attributes": {
-                        "minimum": "<none>",
-                        "initialFormat": "float",
                         "preset": 0,
-                        "maximum": "<none>",
-                        "order": ""
+                        "minimum": "<none>",
+                        "order": "",
+                        "initialFormat": "float",
+                        "maximum": "<none>"
                     },
                     "rnbo_serial": 4,
                     "rnbo_uniqueid": "number_obj-33"
@@ -2687,11 +2687,11 @@
                     "patching_rect": [ 127.0, 821.0, 50.0, 23.0 ],
                     "rnbo_classname": "number",
                     "rnbo_extra_attributes": {
-                        "minimum": "<none>",
-                        "initialFormat": "float",
                         "preset": 0,
-                        "maximum": "<none>",
-                        "order": ""
+                        "minimum": "<none>",
+                        "order": "",
+                        "initialFormat": "float",
+                        "maximum": "<none>"
                     },
                     "rnbo_serial": 5,
                     "rnbo_uniqueid": "number_obj-26"
@@ -2708,11 +2708,11 @@
                     "patching_rect": [ 35.0, 821.0, 50.0, 23.0 ],
                     "rnbo_classname": "number",
                     "rnbo_extra_attributes": {
-                        "minimum": "<none>",
-                        "initialFormat": "float",
                         "preset": 0,
-                        "maximum": "<none>",
-                        "order": ""
+                        "minimum": "<none>",
+                        "order": "",
+                        "initialFormat": "float",
+                        "maximum": "<none>"
                     },
                     "rnbo_serial": 6,
                     "rnbo_uniqueid": "number_obj-19"
@@ -2742,12 +2742,12 @@
                     "patching_rect": [ 35.0, 779.0, 237.0, 23.0 ],
                     "rnbo_classname": "data",
                     "rnbo_extra_attributes": {
-                        "file": "",
-                        "meta": "",
-                        "type": "",
-                        "samplerate": 0.0,
                         "preset": 0,
-                        "fill": ""
+                        "type": "",
+                        "meta": "",
+                        "samplerate": 0.0,
+                        "fill": "",
+                        "file": ""
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "data_obj-22",

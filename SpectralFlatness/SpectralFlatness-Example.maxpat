@@ -4,12 +4,12 @@
         "appversion": {
             "major": 9,
             "minor": 1,
-            "revision": 1,
+            "revision": 2,
             "architecture": "x64",
             "modernui": 1
         },
         "classnamespace": "box",
-        "rect": [ 88.0, 105.0, 1061.0, 738.0 ],
+        "rect": [ 136.0, 99.0, 1061.0, 738.0 ],
         "openinpresentation": 1,
         "boxes": [
             {
@@ -839,12 +839,12 @@
                         "appversion": {
                             "major": 9,
                             "minor": 1,
-                            "revision": 1,
+                            "revision": 2,
                             "architecture": "x64",
                             "modernui": 1
                         },
                         "classnamespace": "rnbo",
-                        "rect": [ 262.0, 87.0, 1116.0, 779.0 ],
+                        "rect": [ 248.0, 627.0, 1116.0, 779.0 ],
                         "default_fontname": "Lato",
                         "title": "untitled",
                         "boxes": [
@@ -858,8 +858,8 @@
                                     "patching_rect": [ 273.0, 47.0, 28.0, 23.0 ],
                                     "rnbo_classname": "in",
                                     "rnbo_extra_attributes": {
-                                        "meta": "",
-                                        "comment": "Poll (Once)"
+                                        "comment": "Poll (Once)",
+                                        "meta": ""
                                     },
                                     "rnbo_serial": 1,
                                     "rnbo_uniqueid": "in_obj-14",
@@ -950,11 +950,11 @@
                                     "rnbo_classname": "p",
                                     "rnbo_extra_attributes": {
                                         "receivemode": "local",
-                                        "exposevoiceparams": 0,
+                                        "polyphony": -1.0,
+                                        "voicecontrol": "simple",
                                         "uidstyle": "auto",
                                         "notecontroller": 0,
-                                        "polyphony": -1.0,
-                                        "voicecontrol": "simple"
+                                        "exposevoiceparams": 0
                                     },
                                     "rnbo_serial": 1,
                                     "rnbo_uniqueid": "p_obj-13",
@@ -1224,8 +1224,8 @@
                                     "patching_rect": [ 212.5, 36.0, 28.0, 23.0 ],
                                     "rnbo_classname": "in",
                                     "rnbo_extra_attributes": {
-                                        "meta": "",
-                                        "comment": "Reset"
+                                        "comment": "Reset",
+                                        "meta": ""
                                     },
                                     "rnbo_serial": 2,
                                     "rnbo_uniqueid": "in_obj-69",
@@ -1303,8 +1303,8 @@
                                     "patching_rect": [ 55.5, 176.0, 36.0, 23.0 ],
                                     "rnbo_classname": "out",
                                     "rnbo_extra_attributes": {
-                                        "meta": "",
-                                        "comment": ""
+                                        "comment": "",
+                                        "meta": ""
                                     },
                                     "rnbo_serial": 1,
                                     "rnbo_uniqueid": "out_obj-8",
@@ -1393,8 +1393,8 @@
                                     "patching_rect": [ 134.0, 36.0, 28.0, 23.0 ],
                                     "rnbo_classname": "in",
                                     "rnbo_extra_attributes": {
-                                        "meta": "",
-                                        "comment": "Enable (Continuous I/O)"
+                                        "comment": "Enable (Continuous I/O)",
+                                        "meta": ""
                                     },
                                     "rnbo_serial": 3,
                                     "rnbo_uniqueid": "in_obj-68",
@@ -1473,8 +1473,8 @@
                                     "patching_rect": [ 56.0, 36.0, 35.0, 23.0 ],
                                     "rnbo_classname": "in~",
                                     "rnbo_extra_attributes": {
-                                        "meta": "",
-                                        "comment": ""
+                                        "comment": "",
+                                        "meta": ""
                                     },
                                     "rnbo_serial": 1,
                                     "rnbo_uniqueid": "in~_obj-3",
@@ -2124,14 +2124,6 @@
             "obj-12": [ "live.gain~[1]", "live.gain~", 0 ],
             "obj-15": [ "live.gain~[2]", "live.gain~", 0 ],
             "obj-6": [ "live.gain~", "live.gain~", 0 ],
-            "parameterbanks": {
-                "0": {
-                    "index": 0,
-                    "name": "",
-                    "parameters": [ "-", "-", "-", "-", "-", "-", "-", "-" ],
-                    "buttons": [ "-", "-", "-", "-", "-", "-", "-", "-" ]
-                }
-            },
             "inherited_shortname": 1
         },
         "autosave": 0

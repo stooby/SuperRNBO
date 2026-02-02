@@ -4,15 +4,273 @@
         "appversion": {
             "major": 9,
             "minor": 1,
-            "revision": 1,
+            "revision": 2,
             "architecture": "x64",
             "modernui": 1
         },
         "classnamespace": "rnbo",
-        "rect": [ 636.0, 179.0, 1605.0, 1054.0 ],
+        "rect": [ 1064.0, 388.0, 868.0, 779.0 ],
         "default_fontname": "Lato",
         "title": "SpectralCentroid",
         "boxes": [
+            {
+                "box": {
+                    "id": "obj-37",
+                    "linecount": 4,
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 1336.0, 772.0, 136.0, 64.0 ],
+                    "text": "need to reinitialize spec_centroid DSP whenever samplerate changes"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-36",
+                    "maxclass": "newobj",
+                    "numinlets": 1,
+                    "numoutlets": 2,
+                    "outlettype": [ "", "" ],
+                    "patching_rect": [ 1020.0, 507.0, 32.0, 23.0 ],
+                    "rnbo_classname": "t",
+                    "rnbo_extra_attributes": {
+                        "triggers": ""
+                    },
+                    "rnbo_serial": 2,
+                    "rnbo_uniqueid": "t_obj-36",
+                    "rnboinfo": {
+                        "needsInstanceInfo": 1,
+                        "argnames": {
+                            "out1": {
+                                "attrOrProp": 1,
+                                "digest": "Output order 2 (bang).",
+                                "defaultarg": 1,
+                                "isalias": 0,
+                                "aliases": [],
+                                "attachable": 0,
+                                "isparam": 0,
+                                "deprecated": 0,
+                                "touched": 0,
+                                "outlet": 1,
+                                "type": "bang"
+                            },
+                            "out2": {
+                                "attrOrProp": 1,
+                                "digest": "Output order 1 (bang).",
+                                "defaultarg": 2,
+                                "isalias": 0,
+                                "aliases": [],
+                                "attachable": 0,
+                                "isparam": 0,
+                                "deprecated": 0,
+                                "touched": 0,
+                                "outlet": 1,
+                                "type": "bang"
+                            },
+                            "triggers": {
+                                "attrOrProp": 2,
+                                "digest": "The number of arguments determines the number of outlets. \t\t\t\t\t\tEach outlet sends out either a whole number, float, bang or list, \t\t\t\t\t\tas identified by symbol arguments (i, f, b, l). \t\t\t\t\t\tIf there are no arguments, there are two outlets, both of which send a float.",
+                                "defaultarg": 1,
+                                "isalias": 0,
+                                "aliases": [],
+                                "settable": 1,
+                                "attachable": 0,
+                                "isparam": 0,
+                                "deprecated": 0,
+                                "touched": 0,
+                                "type": "list"
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "name": "input",
+                                "type": [ "bang", "number", "list" ],
+                                "digest": "input to distribute",
+                                "hot": 1,
+                                "docked": 0
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "name": "out1",
+                                "type": "bang",
+                                "digest": "Output order 2 (bang).",
+                                "defaultarg": 1,
+                                "docked": 0
+                            },
+                            {
+                                "name": "out2",
+                                "type": "bang",
+                                "digest": "Output order 1 (bang).",
+                                "defaultarg": 2,
+                                "docked": 0
+                            }
+                        ],
+                        "helpname": "trigger",
+                        "aliasOf": "trigger",
+                        "classname": "t",
+                        "operator": 0,
+                        "versionId": 1624904035,
+                        "changesPatcherIO": 0
+                    },
+                    "text": "t b b"
+                }
+            },
+            {
+                "box": {
+                    "code": "@state last_sample_rate = 0.0;\r\n\r\nif (samplerate() != last_sample_rate) {\r\n    out1 = 1;\r\n    last_sample_rate = samplerate();\r\n}\r\nelse {\r\n    out1 = 0;\r\n}",
+                    "fontface": 0,
+                    "fontname": "<Monospaced>",
+                    "fontsize": 12.0,
+                    "id": "obj-35",
+                    "maxclass": "codebox",
+                    "numinlets": 1,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 1056.0, 567.0, 340.0, 200.0 ],
+                    "rnbo_classname": "codebox",
+                    "rnbo_extra_attributes": {
+                        "nocache": 0,
+                        "code": "@state last_sample_rate = 0.0;\r\n\r\nif (samplerate() != last_sample_rate) {\r\n    out1 = 1;\r\n    last_sample_rate = samplerate();\r\n}\r\nelse {\r\n    out1 = 0;\r\n}",
+                        "hot": 0,
+                        "safemath": 1
+                    },
+                    "rnbo_serial": 12,
+                    "rnbo_uniqueid": "codebox_obj-35",
+                    "rnboinfo": {
+                        "needsInstanceInfo": 1,
+                        "argnames": {
+                            "reset": {
+                                "attrOrProp": 1,
+                                "digest": "Reset all state and params to initial values",
+                                "isalias": 0,
+                                "aliases": [],
+                                "attachable": 1,
+                                "isparam": 0,
+                                "deprecated": 0,
+                                "touched": 0,
+                                "type": "bang"
+                            },
+                            "out1": {
+                                "attrOrProp": 1,
+                                "digest": "out1",
+                                "isalias": 0,
+                                "aliases": [],
+                                "settable": 0,
+                                "attachable": 0,
+                                "isparam": 0,
+                                "deprecated": 0,
+                                "touched": 0,
+                                "outlet": 1,
+                                "type": "number"
+                            },
+                            "in1": {
+                                "attrOrProp": 1,
+                                "digest": "in1",
+                                "isalias": 0,
+                                "aliases": [],
+                                "settable": 0,
+                                "attachable": 0,
+                                "isparam": 0,
+                                "deprecated": 0,
+                                "touched": 0,
+                                "inlet": 1,
+                                "type": "bang"
+                            },
+                            "expr": {
+                                "attrOrProp": 2,
+                                "digest": "expr",
+                                "defaultarg": 1,
+                                "isalias": 0,
+                                "aliases": [],
+                                "settable": 1,
+                                "attachable": 0,
+                                "isparam": 0,
+                                "deprecated": 0,
+                                "touched": 0,
+                                "type": "symbol",
+                                "doNotShowInMaxInspector": 1
+                            },
+                            "hot": {
+                                "attrOrProp": 2,
+                                "digest": "Trigger computation on all inlets.",
+                                "isalias": 0,
+                                "aliases": [],
+                                "settable": 1,
+                                "attachable": 0,
+                                "isparam": 0,
+                                "deprecated": 0,
+                                "touched": 0,
+                                "type": "bool",
+                                "defaultValue": "false"
+                            },
+                            "safemath": {
+                                "attrOrProp": 2,
+                                "digest": "Use safe math expressions (e.g.: division by 0 will not crash).",
+                                "isalias": 0,
+                                "aliases": [],
+                                "settable": 1,
+                                "attachable": 0,
+                                "isparam": 0,
+                                "deprecated": 0,
+                                "touched": 0,
+                                "type": "bool",
+                                "defaultValue": "true"
+                            },
+                            "nocache": {
+                                "attrOrProp": 2,
+                                "digest": "Do not use parsing cache. This is only useful with very very big code sizes. Code generation will then take a looooong time.",
+                                "isalias": 0,
+                                "aliases": [],
+                                "settable": 1,
+                                "attachable": 0,
+                                "isparam": 0,
+                                "deprecated": 0,
+                                "touched": 0,
+                                "type": "bool",
+                                "defaultValue": "false"
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "name": "in1",
+                                "type": "bang",
+                                "digest": "in1",
+                                "hot": 1,
+                                "docked": 0
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "name": "out1",
+                                "type": "number",
+                                "digest": "out1",
+                                "docked": 0
+                            }
+                        ],
+                        "helpname": "codebox",
+                        "aliasOf": "expr",
+                        "classname": "codebox",
+                        "operator": 0,
+                        "versionId": 835263063,
+                        "changesPatcherIO": 0
+                    }
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-2",
+                    "maxclass": "button",
+                    "numinlets": 1,
+                    "numoutlets": 1,
+                    "outlettype": [ "bang" ],
+                    "parameter_enable": 0,
+                    "patching_rect": [ 841.0, 861.0, 24.0, 24.0 ],
+                    "rnbo_classname": "button",
+                    "rnbo_serial": 1,
+                    "rnbo_uniqueid": "button_obj-2"
+                }
+            },
             {
                 "box": {
                     "id": "obj-1",
@@ -33,8 +291,8 @@
                     "patching_rect": [ 1369.0, 467.0, 36.0, 23.0 ],
                     "rnbo_classname": "out",
                     "rnbo_extra_attributes": {
-                        "meta": "",
-                        "comment": "Poll Delay (ms)"
+                        "comment": "Poll Delay (ms)",
+                        "meta": ""
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "out_obj-34",
@@ -115,11 +373,11 @@
                     "patching_rect": [ 1315.0, 403.0, 74.74747109413147, 23.0 ],
                     "rnbo_classname": "number",
                     "rnbo_extra_attributes": {
-                        "maximum": "<none>",
-                        "initialFormat": "float",
+                        "preset": 0,
                         "minimum": "<none>",
                         "order": "",
-                        "preset": 0
+                        "initialFormat": "float",
+                        "maximum": "<none>"
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "number_obj-31"
@@ -171,9 +429,9 @@
                     "patching_rect": [ 1270.0, 269.0, 92.92928838729858, 23.0 ],
                     "rnbo_classname": "number~",
                     "rnbo_extra_attributes": {
+                        "initialMode": "monitor",
                         "interval": 100.0,
-                        "displaymode": "first",
-                        "initialMode": "monitor"
+                        "displaymode": "first"
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "number~_obj-27",
@@ -201,8 +459,8 @@
                     "patching_rect": [ 288.0, 661.0, 24.0, 24.0 ],
                     "rnbo_classname": "toggle",
                     "rnbo_extra_attributes": {
-                        "order": "",
-                        "preset": 0
+                        "preset": 0,
+                        "order": ""
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "toggle_obj-40"
@@ -221,9 +479,9 @@
                     "patching_rect": [ 284.0, 730.0, 497.0, 370.0 ],
                     "rnbo_classname": "codebox",
                     "rnbo_extra_attributes": {
-                        "hot": 0,
                         "nocache": 0,
                         "code": "@state audiobuf = new buffer(\"local:fftbuf_1\"); //reference to data \"fftbuf\" object in RNBO patch\r\n@state trigger_read = 0;\r\nconst readArraySize = 520;\r\n\r\nvar triggerInput = in1;\r\n\r\nif (triggerInput > 0) {\r\n\tif (trigger_read == 0) {\r\n\t\ttrigger_read = 1;\r\n        \r\n        post(\"=====fftbuf_1=====\");\r\n\t\t//read from buf\r\n        for (var i : Int = 0; i < readArraySize; i++) {\r\n\t\t\tlet value = peek(audiobuf, i);\r\n            post(\"[specCent_fftbuf_1] i=\", i, \" | \", value[0]);\r\n\t\t}\r\n\t}\r\n}\r\nelse {\r\n\tif (trigger_read == 1) {\r\n\t\ttrigger_read = 0;\r\n\t}\r\n}",
+                        "hot": 0,
                         "safemath": 1
                     },
                     "rnbo_serial": 1,
@@ -338,12 +596,12 @@
                     "patching_rect": [ 1599.0, 413.0, 50.0, 23.0 ],
                     "rnbo_classname": "message",
                     "rnbo_extra_attributes": {
-                        "storeempty": 0,
-                        "text": ""
+                        "text": "",
+                        "storeempty": 0
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "message_obj-4",
-                    "text": "256"
+                    "text": "1024"
                 }
             },
             {
@@ -438,11 +696,11 @@
                     "patching_rect": [ 782.0, 403.0, 74.74747109413147, 23.0 ],
                     "rnbo_classname": "number",
                     "rnbo_extra_attributes": {
-                        "maximum": "<none>",
-                        "initialFormat": "float",
+                        "preset": 0,
                         "minimum": "<none>",
                         "order": "",
-                        "preset": 0
+                        "initialFormat": "float",
+                        "maximum": "<none>"
                     },
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "number_obj-18"
@@ -480,9 +738,9 @@
                     "patching_rect": [ 811.0, 328.0, 92.92928838729858, 23.0 ],
                     "rnbo_classname": "number~",
                     "rnbo_extra_attributes": {
+                        "initialMode": "monitor",
                         "interval": 100.0,
-                        "displaymode": "first",
-                        "initialMode": "monitor"
+                        "displaymode": "first"
                     },
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "number~_obj-21",
@@ -491,7 +749,7 @@
             },
             {
                 "box": {
-                    "code": "@param({min: 64, max: 2048}) fftsize = 1024;\r\nvar samplerate = samplerate();\r\nvar vectorsize = vectorsize();\r\nvar msPerBuffer = (fftsize/samplerate) * 1000;\r\n//post(\"buffersize = \", buffersize, \" | samplerate = \", samplerate, \" | vectorsize/samplerate = \", msPerBuffer);\r\nvar input = in1; //have to create dummy input to allow fftsize param to be set via messages\r\n\r\n//see comment in patch to right about why we set pollDelay like below...\r\n//var pollDelay = msPerBuffer * 3; //works well\r\nvar pollDelay = msPerBuffer * 2.5; //works well, a little lower latency (but only when fftsize = 512 or 1024, not less)\r\n\r\nif (vectorsize() == 1024) {\r\n    pollDelay = (1024/samplerate) * 1000 * 3.5;\r\n    //pollDelay = msPerBuffer * 3.5; //good (if fftsize = 1024, but not if 512)\r\n}\r\nelse if (vectorsize() > 1024) {\r\n    pollDelay = ((2048/samplerate) * 1000) * 2; //works well\r\n    //pollDelay = ((vectorsize()/samplerate) * 1000) * 1.5; //doesn't work\r\n}\r\nelse {\r\n    if (fftsize < 512) {\r\n        pollDelay = ((512/samplerate) * 1000) * 3;\r\n    }\r\n}\r\nout1 = msPerBuffer;\r\nout2 = pollDelay;",
+                    "code": "@param({min: 64, max: 2048}) fftsize = 1024;\r\nvar sample_rate = 0;\r\nvar vectorsize = vectorsize();\r\nvar msPerBuffer = (fftsize/samplerate()) * 1000;\r\n//post(\"buffersize = \", buffersize, \" | samplerate = \", samplerate, \" | vectorsize/samplerate = \", msPerBuffer);\r\nvar input = in1; //have to create dummy input to allow fftsize param to be set via messages\r\n\r\n//see comment in patch to right about why we set pollDelay like below...\r\n//var pollDelay = msPerBuffer * 3; //works well\r\nvar pollDelay = 0.0;\r\n\r\nif (samplerate() > 48000) {\r\n    sample_rate = 0.5 * samplerate(); //preserve desired poll delay at higher SRs\r\n}\r\nelse {\r\n    sample_rate = samplerate();\r\n}\r\n\r\n\r\nif (vectorsize <= 512) {\r\n    if (fftsize < 512) {\r\n        pollDelay = ((512/sample_rate) * 1000) * 3;\r\n    }\r\n    else {\r\n        pollDelay = msPerBuffer * 3;\r\n        //pollDelay = msPerBuffer * 2.5\r\n        //pollDelay = floor(msPerBuffer * 2) + 1;\r\n    }\r\n}\r\nelse if (vectorsize == 1024) {\r\n    pollDelay = (vectorsize/sample_rate) * 1000 * 3.5;\r\n    //pollDelay = msPerBuffer * 3.5; //good (if fftsize = 1024, but not if 512)\r\n}\r\nelse if (vectorsize > 1024) {\r\n    pollDelay = floor((vectorsize/sample_rate) * 1000 * 2) + 1; //works well\r\n    //pollDelay = ((vectorsize()/samplerate) * 1000) * 1.5; //doesn't work\r\n}\r\n\r\nout1 = msPerBuffer;\r\nout2 = pollDelay;",
                     "fontface": 0,
                     "fontname": "<Monospaced>",
                     "fontsize": 12.0,
@@ -503,12 +761,12 @@
                     "patching_rect": [ 782.0, 103.0, 460.0, 203.0 ],
                     "rnbo_classname": "codebox~",
                     "rnbo_extra_attributes": {
-                        "expr": "",
                         "nocache": 0,
-                        "code": "@param({min: 64, max: 2048}) fftsize = 1024;\r\nvar samplerate = samplerate();\r\nvar vectorsize = vectorsize();\r\nvar msPerBuffer = (fftsize/samplerate) * 1000;\r\n//post(\"buffersize = \", buffersize, \" | samplerate = \", samplerate, \" | vectorsize/samplerate = \", msPerBuffer);\r\nvar input = in1; //have to create dummy input to allow fftsize param to be set via messages\r\n\r\n//see comment in patch to right about why we set pollDelay like below...\r\n//var pollDelay = msPerBuffer * 3; //works well\r\nvar pollDelay = msPerBuffer * 2.5; //works well, a little lower latency (but only when fftsize = 512 or 1024, not less)\r\n\r\nif (vectorsize() == 1024) {\r\n    pollDelay = (1024/samplerate) * 1000 * 3.5;\r\n    //pollDelay = msPerBuffer * 3.5; //good (if fftsize = 1024, but not if 512)\r\n}\r\nelse if (vectorsize() > 1024) {\r\n    pollDelay = ((2048/samplerate) * 1000) * 2; //works well\r\n    //pollDelay = ((vectorsize()/samplerate) * 1000) * 1.5; //doesn't work\r\n}\r\nelse {\r\n    if (fftsize < 512) {\r\n        pollDelay = ((512/samplerate) * 1000) * 3;\r\n    }\r\n}\r\nout1 = msPerBuffer;\r\nout2 = pollDelay;",
+                        "code": "@param({min: 64, max: 2048}) fftsize = 1024;\r\nvar sample_rate = 0;\r\nvar vectorsize = vectorsize();\r\nvar msPerBuffer = (fftsize/samplerate()) * 1000;\r\n//post(\"buffersize = \", buffersize, \" | samplerate = \", samplerate, \" | vectorsize/samplerate = \", msPerBuffer);\r\nvar input = in1; //have to create dummy input to allow fftsize param to be set via messages\r\n\r\n//see comment in patch to right about why we set pollDelay like below...\r\n//var pollDelay = msPerBuffer * 3; //works well\r\nvar pollDelay = 0.0;\r\n\r\nif (samplerate() > 48000) {\r\n    sample_rate = 0.5 * samplerate(); //preserve desired poll delay at higher SRs\r\n}\r\nelse {\r\n    sample_rate = samplerate();\r\n}\r\n\r\n\r\nif (vectorsize <= 512) {\r\n    if (fftsize < 512) {\r\n        pollDelay = ((512/sample_rate) * 1000) * 3;\r\n    }\r\n    else {\r\n        pollDelay = msPerBuffer * 3;\r\n        //pollDelay = msPerBuffer * 2.5\r\n        //pollDelay = floor(msPerBuffer * 2) + 1;\r\n    }\r\n}\r\nelse if (vectorsize == 1024) {\r\n    pollDelay = (vectorsize/sample_rate) * 1000 * 3.5;\r\n    //pollDelay = msPerBuffer * 3.5; //good (if fftsize = 1024, but not if 512)\r\n}\r\nelse if (vectorsize > 1024) {\r\n    pollDelay = floor((vectorsize/sample_rate) * 1000 * 2) + 1; //works well\r\n    //pollDelay = ((vectorsize()/samplerate) * 1000) * 1.5; //doesn't work\r\n}\r\n\r\nout1 = msPerBuffer;\r\nout2 = pollDelay;",
+                        "expr": "",
                         "safemath": 1
                     },
-                    "rnbo_serial": 4,
+                    "rnbo_serial": 7,
                     "rnbo_uniqueid": "codebox~_obj-23",
                     "rnboinfo": {
                         "needsInstanceInfo": 1,
@@ -739,8 +997,8 @@
                     "patching_rect": [ 572.0, 135.0, 24.0, 24.0 ],
                     "rnbo_classname": "toggle",
                     "rnbo_extra_attributes": {
-                        "order": "",
-                        "preset": 0
+                        "preset": 0,
+                        "order": ""
                     },
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "toggle_obj-13"
@@ -756,8 +1014,8 @@
                     "patching_rect": [ 1264.0, 431.0, 28.0, 23.0 ],
                     "rnbo_classname": "in",
                     "rnbo_extra_attributes": {
-                        "meta": "",
-                        "comment": "Poll (Once)"
+                        "comment": "Poll (Once)",
+                        "meta": ""
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "in_obj-12",
@@ -834,11 +1092,11 @@
                     "numoutlets": 1,
                     "outlettype": [ "int" ],
                     "parameter_enable": 0,
-                    "patching_rect": [ 1058.5, 350.0, 24.0, 24.0 ],
+                    "patching_rect": [ 1291.5, 836.0, 24.0, 24.0 ],
                     "rnbo_classname": "toggle",
                     "rnbo_extra_attributes": {
-                        "order": "",
-                        "preset": 0
+                        "preset": 0,
+                        "order": ""
                     },
                     "rnbo_serial": 3,
                     "rnbo_uniqueid": "toggle_obj-10"
@@ -851,7 +1109,7 @@
                     "numinlets": 1,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 1056.5, 417.0, 81.0, 23.0 ],
+                    "patching_rect": [ 1289.5, 903.0, 81.0, 23.0 ],
                     "rnbo_classname": "set",
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "set_obj-75",
@@ -907,22 +1165,22 @@
                     "numinlets": 2,
                     "numoutlets": 2,
                     "outlettype": [ "", "" ],
-                    "patching_rect": [ 1056.5, 386.0, 195.0, 23.0 ],
+                    "patching_rect": [ 1289.5, 872.0, 195.0, 23.0 ],
                     "rnbo_classname": "param",
                     "rnbo_extra_attributes": {
-                        "enum": "",
-                        "tonormalized": "",
-                        "steps": 0.0,
-                        "ctlin": 0.0,
-                        "meta": "",
-                        "fromnormalized": "",
+                        "preset": 1,
                         "sendinit": 1,
-                        "unit": "",
+                        "meta": "",
                         "displayname": "",
                         "displayorder": "-",
+                        "fromnormalized": "",
                         "exponent": 1.0,
+                        "enum": "",
+                        "ctlin": 0.0,
+                        "unit": "",
+                        "tonormalized": "",
                         "order": "0",
-                        "preset": 1
+                        "steps": 0.0
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "needs_init",
@@ -1325,11 +1583,11 @@
                     "numinlets": 0,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 1058.5, 316.0, 28.0, 23.0 ],
+                    "patching_rect": [ 1291.5, 782.0, 28.0, 23.0 ],
                     "rnbo_classname": "in",
                     "rnbo_extra_attributes": {
-                        "meta": "",
-                        "comment": "Reset"
+                        "comment": "Reset",
+                        "meta": ""
                     },
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "in_obj-69",
@@ -1406,14 +1664,14 @@
                     "numoutlets": 2,
                     "outlettype": [ "", "bang" ],
                     "parameter_enable": 0,
-                    "patching_rect": [ 821.0, 1068.0, 50.0, 23.0 ],
+                    "patching_rect": [ 862.0, 1500.0, 50.0, 23.0 ],
                     "rnbo_classname": "number",
                     "rnbo_extra_attributes": {
-                        "maximum": "<none>",
-                        "initialFormat": "float",
+                        "preset": 0,
                         "minimum": "<none>",
                         "order": "",
-                        "preset": 0
+                        "initialFormat": "float",
+                        "maximum": "<none>"
                     },
                     "rnbo_serial": 3,
                     "rnbo_uniqueid": "number_obj-9"
@@ -1425,11 +1683,11 @@
                     "maxclass": "newobj",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 796.0, 1113.0, 36.0, 23.0 ],
+                    "patching_rect": [ 837.0, 1545.0, 36.0, 23.0 ],
                     "rnbo_classname": "out",
                     "rnbo_extra_attributes": {
-                        "meta": "",
-                        "comment": ""
+                        "comment": "",
+                        "meta": ""
                     },
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "out_obj-8",
@@ -1505,12 +1763,12 @@
                     "maxclass": "comment",
                     "numinlets": 1,
                     "numoutlets": 0,
-                    "patching_rect": [ 1627.0, 1051.0, 150.0, 21.0 ]
+                    "patching_rect": [ 1652.0, 1531.0, 150.0, 21.0 ]
                 }
             },
             {
                 "box": {
-                    "code": "@param({min: 64, max: 2048}) fftsize = 1024;\n//@state last_fftsize = 0; //<----not needed unless you want to log fftsize changes\n@state fftbuf_index : Int = 0; //track the last index to read from fftbuf (needed when I/O buffer size and fftbuf > fftsize)\n@state last_samplecount : Int = 0; //track last samplecount value to know when we've started a new I/O buffer\n\n@param({min: 0, max: 1}) needs_init = 1; //only needed if fftsize changes after construction, but that's not likely to ever happen\n//@state last_needs_init = 0; //<----not needed unless you want to log needs_init changes\n\n@state numbins : Int = 0; // numbins is the fftsize bin count not including DC/nyq (fftsize / 2 - 1)\n@state bintofreq = 0.0;\n\nconst specCentroid_data_array_size : Int = 2048; //max possible value of fftsize (buffer size)...\n//@state specCentroid_data_array_size : Int = fftsize; //this would be the only ever value, but can't cast @param in this way in RNBO (causes error)\n@state specCentroid_data_array = new FixedFloatArray(specCentroid_data_array_size);\n\n\n@state fftbuf = new buffer(\"local:fftbuf_1\"); //reference to data \"fftbuf\" object in RNBO patch\n\nfunction specCentroid_init(this_fftsize) {\n    for (var i = 0; i < specCentroid_data_array_size; i++) {\n        specCentroid_data_array[i] = 0.0; //0 out data array\n    }\n    \n    //int numbins = (buf->samples - 2) >> 1; //source FFTAnalyser_GET_BUF\n    numbins = (this_fftsize - 2) >> 1; //(fftsize / 2 - 1)\n    //post(\"[specCentroid_init] numbins:\");\n    //post(numbins);\n    \n    var samplerate = samplerate();\n    bintofreq = samplerate / this_fftsize; //from GET_BINTOFREQ\n    //post(\"[specCentroid_init] samplerate: \", samplerate);\r\n    //post(\"[specCentroid_init] fftsize: \", fftsize);\n    //post(samplerate);\n    //post(\"[specCentroid_init] bintofreq =\");\n    //post(bintofreq);\n}\n\n//Load the current frame of FFT data into specCentroid_data_array\nfunction specCentroid_load_frame(this_fftsize, startIndex) {\n    if (this_fftsize > specCentroid_data_array_size) {\n        //safeguard against writing out of bounds of specCentroid_data_array\n        this_fftsize = specCentroid_data_array_size;\n        post(\"WARNING!!! fftsize was set to value > specCentroid_data_array_size\");\n        post(\"fftsize now = specCentroid_data_array_size to avoid crash\");\n    }\n    \n    //store all fftbuf data in specCentroid_data_array in SC's native FFT buffer format: [dc, nyq, bin1 mag, bin1 phase, bin2 mag, bin2 phase, etc]...\n    for (var i : Int = 0; i < this_fftsize/2; i++) {\n        if (i < 1) {\n            //post(\"===========\");\n            //no conversion needed for these...\n            var dc = peek(fftbuf, startIndex);\n            var nyq = peek(fftbuf, startIndex + 1);\n            specCentroid_data_array[0] = dc[0];\n            specCentroid_data_array[1] = nyq[0];\n        }\n        else if (i >= 1 && (i < this_fftsize/2)) {\n        \t//using sda_index_x and sda_index_y to decouple specFlat_data_array write positions from fftbuf read positions via startIndex\n            var sda_index_x : Int = 2 * i;\n            var sda_index_y : Int = sda_index_x + 1;\n            var read_index_x : Int = sda_index_x + startIndex;\n            var read_index_y : Int = read_index_x + 1;\n            var real = peek(fftbuf, read_index_x);\n            var imaginary = peek(fftbuf, read_index_y);\n            \n            var polar = cartopol(real[0], imaginary[0]); //convert to polar\n            specCentroid_data_array[sda_index_x] = polar[0]; //mag\n            specCentroid_data_array[sda_index_y] = polar[1]; //phase\n        }\n    }\n}\n\nfunction SpecCentroid_next() {\n    var outval = 0.0;\n    \n    if (needs_init) {\n        specCentroid_init(fftsize);\n        needs_init = 0;\n    }\n    \n    var samplecount : Int = samplecount(); //total # of samples elapsed since RNBO code was loaded, at the start of this audio buffer\n    //if we've started a new audio buffer, or we've incremented past the I/O buffer size, reset fftbuf_index (read index) to 0\n    if (samplecount != last_samplecount || fftbuf_index >= vectorsize()) {\n\t\tfftbuf_index = 0;\n\t\tlast_samplecount = samplecount;\n\t}\n    \n    //FFTAnalyser_GET_BUF //source\n    specCentroid_load_frame(fftsize, fftbuf_index);\n    fftbuf_index += fftsize; //increment fftbuf_index by fftsize (to handle cases when fftsize != I/O vector size)\n    \n    //SCPolarBuf* p = ToPolarApx(buf); //source (in specCentroid_load_frame() )\n\n    //GET_BINTOFREQ //source (in specCentroid_init() )\n    \n    //double num = sc_abs(p->nyq) * (numbins + 1); //source\n    var num = abs(specCentroid_data_array[1]) * (numbins + 1);\n    \n    //double denom = sc_abs(p->nyq); //source\n    var denom = abs(specCentroid_data_array[1]);\n\n    for (var i = 0; i < numbins; ++i) {\n        var index_bin_mag : Int = (2 * i) + 2; //bin mag values are even indeces starting at 2 (dc and nyq are 0 and 1) in 'specCentroid_data_array'\n        \n        //num += sc_abs(p->bin[i].mag) * (i + 1); //source\n        num += abs(specCentroid_data_array[index_bin_mag]) * (i + 1);\n        \n        //denom += sc_abs(p->bin[i].mag); //source\n        denom += abs(specCentroid_data_array[index_bin_mag]);\n    }\n\n    //ZOUT0(0) = unit->outval = denom == 0.0 ? 0.f : (float)(bintofreq * num / denom); //source\n    outval = denom == 0.0 ? 0.0 : (bintofreq * num / denom);\n    out1 = outval;\n}\n\nSpecCentroid_next();\n",
+                    "code": "@param({min: 64, max: 2048}) fftsize = 1024;\n//@state last_fftsize = 0; //<----not needed unless you want to log fftsize changes\n@state fftbuf_index : Int = 0; //track the last index to read from fftbuf (needed when I/O buffer size and fftbuf > fftsize)\n@state last_samplecount : Int = 0; //track last samplecount value to know when we've started a new I/O buffer\n\n@param({min: 0, max: 1}) needs_init = 1; //only needed if fftsize changes after construction, but that's not likely to ever happen\n//@state last_needs_init = 0; //<----not needed unless you want to log needs_init changes\n\n@state numbins : Int = 0; // numbins is the fftsize bin count not including DC/nyq (fftsize / 2 - 1)\n@state bintofreq = 0.0;\n\nconst specCentroid_data_array_size : Int = 2048; //max possible value of fftsize (buffer size)...\n//@state specCentroid_data_array_size : Int = fftsize; //this would be the only ever value, but can't cast @param in this way in RNBO (causes error)\n@state specCentroid_data_array = new FixedFloatArray(specCentroid_data_array_size);\n\n\n@state fftbuf = new buffer(\"local:fftbuf_1\"); //reference to data \"fftbuf\" object in RNBO patch\n\r\nfunction specCentroid_init(this_fftsize) {\n    for (var i = 0; i < specCentroid_data_array_size; i++) {\n        specCentroid_data_array[i] = 0.0; //0 out data array\n    }\n    \n    //int numbins = (buf->samples - 2) >> 1; //source FFTAnalyser_GET_BUF\n    numbins = (this_fftsize - 2) >> 1; //(fftsize / 2 - 1)\n    //post(\"[specCentroid_init] numbins:\");\n    //post(numbins);\n    \n    //var sample_rate = samplerate();\r\n    //var vector_size = vectorsize();\n    //bintofreq = sample_rate / this_fftsize; //from GET_BINTOFREQ\r\n    bintofreq = samplerate() / this_fftsize; //from GET_BINTOFREQ\r\n    post(\"-----------\");\r\n    post(\"[specCentroid_init] vectorsize: \", vectorsize());\n    post(\"[specCentroid_init] samplerate: \", samplerate());\r\n    post(\"[specCentroid_init] fftsize: \", fftsize);\n    post(\"[specCentroid_init] bintofreq =\", bintofreq);\n}\n\n\n//Load the current frame of FFT data into specCentroid_data_array\nfunction specCentroid_load_frame(this_fftsize, startIndex) {\n    if (this_fftsize > specCentroid_data_array_size) {\n        //safeguard against writing out of bounds of specCentroid_data_array\n        this_fftsize = specCentroid_data_array_size;\n        post(\"WARNING!!! fftsize was set to value > specCentroid_data_array_size\");\n        post(\"fftsize now = specCentroid_data_array_size to avoid crash\");\n    }\n    \n    //store all fftbuf data in specCentroid_data_array in SC's native FFT buffer format: [dc, nyq, bin1 mag, bin1 phase, bin2 mag, bin2 phase, etc]...\n    for (var i : Int = 0; i < this_fftsize/2; i++) {\n        if (i < 1) {\n            //post(\"===========\");\n            //no conversion needed for these...\n            var dc = peek(fftbuf, startIndex);\n            var nyq = peek(fftbuf, startIndex + 1);\n            specCentroid_data_array[0] = dc[0];\n            specCentroid_data_array[1] = nyq[0];\n        }\n        else if (i >= 1 && (i < this_fftsize/2)) {\n        \t//using sda_index_x and sda_index_y to decouple specFlat_data_array write positions from fftbuf read positions via startIndex\n            var sda_index_x : Int = 2 * i;\n            var sda_index_y : Int = sda_index_x + 1;\n            var read_index_x : Int = sda_index_x + startIndex;\n            var read_index_y : Int = read_index_x + 1;\n            var real = peek(fftbuf, read_index_x);\n            var imaginary = peek(fftbuf, read_index_y);\n            \n            var polar = cartopol(real[0], imaginary[0]); //convert to polar\n            specCentroid_data_array[sda_index_x] = polar[0]; //mag\n            specCentroid_data_array[sda_index_y] = polar[1]; //phase\n        }\n    }\n}\n\nfunction SpecCentroid_next() {\n    var outval = 0.0;\n    \n    if (needs_init) {\n        specCentroid_init(fftsize);\n        needs_init = 0;\n    }\n    \n    var samplecount : Int = samplecount(); //total # of samples elapsed since RNBO code was loaded, at the start of this audio buffer\n    //if we've started a new audio buffer, or we've incremented past the I/O buffer size, reset fftbuf_index (read index) to 0\n    if (samplecount != last_samplecount || fftbuf_index >= vectorsize()) {\n\t\tfftbuf_index = 0;\n\t\tlast_samplecount = samplecount;\n\t}\n    \n    //FFTAnalyser_GET_BUF //source\n    specCentroid_load_frame(fftsize, fftbuf_index);\n    fftbuf_index += fftsize; //increment fftbuf_index by fftsize (to handle cases when fftsize != I/O vector size)\n    \n    //SCPolarBuf* p = ToPolarApx(buf); //source (in specCentroid_load_frame() )\n\n    //GET_BINTOFREQ //source (in specCentroid_init() )\n    \n    //double num = sc_abs(p->nyq) * (numbins + 1); //source\n    var num = abs(specCentroid_data_array[1]) * (numbins + 1);\n    \n    //double denom = sc_abs(p->nyq); //source\n    var denom = abs(specCentroid_data_array[1]);\n\n    for (var i = 0; i < numbins; ++i) {\n        var index_bin_mag : Int = (2 * i) + 2; //bin mag values are even indeces starting at 2 (dc and nyq are 0 and 1) in 'specCentroid_data_array'\n        \n        //num += sc_abs(p->bin[i].mag) * (i + 1); //source\n        num += abs(specCentroid_data_array[index_bin_mag]) * (i + 1);\n        \n        //denom += sc_abs(p->bin[i].mag); //source\n        denom += abs(specCentroid_data_array[index_bin_mag]);\n    }\n\n    //ZOUT0(0) = unit->outval = denom == 0.0 ? 0.f : (float)(bintofreq * num / denom); //source\n    outval = denom == 0.0 ? 0.0 : (bintofreq * num / denom);\n    out1 = outval;\n}\n\nSpecCentroid_next();\n",
                     "fontface": 0,
                     "fontname": "<Monospaced>",
                     "fontsize": 12.0,
@@ -1519,15 +1777,15 @@
                     "numinlets": 1,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 796.0, 537.0, 716.0, 510.0 ],
+                    "patching_rect": [ 837.0, 969.0, 716.0, 510.0 ],
                     "rnbo_classname": "codebox",
                     "rnbo_extra_attributes": {
-                        "hot": 0,
                         "nocache": 0,
-                        "code": "@param({min: 64, max: 2048}) fftsize = 1024;\n//@state last_fftsize = 0; //<----not needed unless you want to log fftsize changes\n@state fftbuf_index : Int = 0; //track the last index to read from fftbuf (needed when I/O buffer size and fftbuf > fftsize)\n@state last_samplecount : Int = 0; //track last samplecount value to know when we've started a new I/O buffer\n\n@param({min: 0, max: 1}) needs_init = 1; //only needed if fftsize changes after construction, but that's not likely to ever happen\n//@state last_needs_init = 0; //<----not needed unless you want to log needs_init changes\n\n@state numbins : Int = 0; // numbins is the fftsize bin count not including DC/nyq (fftsize / 2 - 1)\n@state bintofreq = 0.0;\n\nconst specCentroid_data_array_size : Int = 2048; //max possible value of fftsize (buffer size)...\n//@state specCentroid_data_array_size : Int = fftsize; //this would be the only ever value, but can't cast @param in this way in RNBO (causes error)\n@state specCentroid_data_array = new FixedFloatArray(specCentroid_data_array_size);\n\n\n@state fftbuf = new buffer(\"local:fftbuf_1\"); //reference to data \"fftbuf\" object in RNBO patch\n\nfunction specCentroid_init(this_fftsize) {\n    for (var i = 0; i < specCentroid_data_array_size; i++) {\n        specCentroid_data_array[i] = 0.0; //0 out data array\n    }\n    \n    //int numbins = (buf->samples - 2) >> 1; //source FFTAnalyser_GET_BUF\n    numbins = (this_fftsize - 2) >> 1; //(fftsize / 2 - 1)\n    //post(\"[specCentroid_init] numbins:\");\n    //post(numbins);\n    \n    var samplerate = samplerate();\n    bintofreq = samplerate / this_fftsize; //from GET_BINTOFREQ\n    //post(\"[specCentroid_init] samplerate: \", samplerate);\r\n    //post(\"[specCentroid_init] fftsize: \", fftsize);\n    //post(samplerate);\n    //post(\"[specCentroid_init] bintofreq =\");\n    //post(bintofreq);\n}\n\n//Load the current frame of FFT data into specCentroid_data_array\nfunction specCentroid_load_frame(this_fftsize, startIndex) {\n    if (this_fftsize > specCentroid_data_array_size) {\n        //safeguard against writing out of bounds of specCentroid_data_array\n        this_fftsize = specCentroid_data_array_size;\n        post(\"WARNING!!! fftsize was set to value > specCentroid_data_array_size\");\n        post(\"fftsize now = specCentroid_data_array_size to avoid crash\");\n    }\n    \n    //store all fftbuf data in specCentroid_data_array in SC's native FFT buffer format: [dc, nyq, bin1 mag, bin1 phase, bin2 mag, bin2 phase, etc]...\n    for (var i : Int = 0; i < this_fftsize/2; i++) {\n        if (i < 1) {\n            //post(\"===========\");\n            //no conversion needed for these...\n            var dc = peek(fftbuf, startIndex);\n            var nyq = peek(fftbuf, startIndex + 1);\n            specCentroid_data_array[0] = dc[0];\n            specCentroid_data_array[1] = nyq[0];\n        }\n        else if (i >= 1 && (i < this_fftsize/2)) {\n        \t//using sda_index_x and sda_index_y to decouple specFlat_data_array write positions from fftbuf read positions via startIndex\n            var sda_index_x : Int = 2 * i;\n            var sda_index_y : Int = sda_index_x + 1;\n            var read_index_x : Int = sda_index_x + startIndex;\n            var read_index_y : Int = read_index_x + 1;\n            var real = peek(fftbuf, read_index_x);\n            var imaginary = peek(fftbuf, read_index_y);\n            \n            var polar = cartopol(real[0], imaginary[0]); //convert to polar\n            specCentroid_data_array[sda_index_x] = polar[0]; //mag\n            specCentroid_data_array[sda_index_y] = polar[1]; //phase\n        }\n    }\n}\n\nfunction SpecCentroid_next() {\n    var outval = 0.0;\n    \n    if (needs_init) {\n        specCentroid_init(fftsize);\n        needs_init = 0;\n    }\n    \n    var samplecount : Int = samplecount(); //total # of samples elapsed since RNBO code was loaded, at the start of this audio buffer\n    //if we've started a new audio buffer, or we've incremented past the I/O buffer size, reset fftbuf_index (read index) to 0\n    if (samplecount != last_samplecount || fftbuf_index >= vectorsize()) {\n\t\tfftbuf_index = 0;\n\t\tlast_samplecount = samplecount;\n\t}\n    \n    //FFTAnalyser_GET_BUF //source\n    specCentroid_load_frame(fftsize, fftbuf_index);\n    fftbuf_index += fftsize; //increment fftbuf_index by fftsize (to handle cases when fftsize != I/O vector size)\n    \n    //SCPolarBuf* p = ToPolarApx(buf); //source (in specCentroid_load_frame() )\n\n    //GET_BINTOFREQ //source (in specCentroid_init() )\n    \n    //double num = sc_abs(p->nyq) * (numbins + 1); //source\n    var num = abs(specCentroid_data_array[1]) * (numbins + 1);\n    \n    //double denom = sc_abs(p->nyq); //source\n    var denom = abs(specCentroid_data_array[1]);\n\n    for (var i = 0; i < numbins; ++i) {\n        var index_bin_mag : Int = (2 * i) + 2; //bin mag values are even indeces starting at 2 (dc and nyq are 0 and 1) in 'specCentroid_data_array'\n        \n        //num += sc_abs(p->bin[i].mag) * (i + 1); //source\n        num += abs(specCentroid_data_array[index_bin_mag]) * (i + 1);\n        \n        //denom += sc_abs(p->bin[i].mag); //source\n        denom += abs(specCentroid_data_array[index_bin_mag]);\n    }\n\n    //ZOUT0(0) = unit->outval = denom == 0.0 ? 0.f : (float)(bintofreq * num / denom); //source\n    outval = denom == 0.0 ? 0.0 : (bintofreq * num / denom);\n    out1 = outval;\n}\n\nSpecCentroid_next();\n",
+                        "code": "@param({min: 64, max: 2048}) fftsize = 1024;\n//@state last_fftsize = 0; //<----not needed unless you want to log fftsize changes\n@state fftbuf_index : Int = 0; //track the last index to read from fftbuf (needed when I/O buffer size and fftbuf > fftsize)\n@state last_samplecount : Int = 0; //track last samplecount value to know when we've started a new I/O buffer\n\n@param({min: 0, max: 1}) needs_init = 1; //only needed if fftsize changes after construction, but that's not likely to ever happen\n//@state last_needs_init = 0; //<----not needed unless you want to log needs_init changes\n\n@state numbins : Int = 0; // numbins is the fftsize bin count not including DC/nyq (fftsize / 2 - 1)\n@state bintofreq = 0.0;\n\nconst specCentroid_data_array_size : Int = 2048; //max possible value of fftsize (buffer size)...\n//@state specCentroid_data_array_size : Int = fftsize; //this would be the only ever value, but can't cast @param in this way in RNBO (causes error)\n@state specCentroid_data_array = new FixedFloatArray(specCentroid_data_array_size);\n\n\n@state fftbuf = new buffer(\"local:fftbuf_1\"); //reference to data \"fftbuf\" object in RNBO patch\n\r\nfunction specCentroid_init(this_fftsize) {\n    for (var i = 0; i < specCentroid_data_array_size; i++) {\n        specCentroid_data_array[i] = 0.0; //0 out data array\n    }\n    \n    //int numbins = (buf->samples - 2) >> 1; //source FFTAnalyser_GET_BUF\n    numbins = (this_fftsize - 2) >> 1; //(fftsize / 2 - 1)\n    //post(\"[specCentroid_init] numbins:\");\n    //post(numbins);\n    \n    //var sample_rate = samplerate();\r\n    //var vector_size = vectorsize();\n    //bintofreq = sample_rate / this_fftsize; //from GET_BINTOFREQ\r\n    bintofreq = samplerate() / this_fftsize; //from GET_BINTOFREQ\r\n    post(\"-----------\");\r\n    post(\"[specCentroid_init] vectorsize: \", vectorsize());\n    post(\"[specCentroid_init] samplerate: \", samplerate());\r\n    post(\"[specCentroid_init] fftsize: \", fftsize);\n    post(\"[specCentroid_init] bintofreq =\", bintofreq);\n}\n\n\n//Load the current frame of FFT data into specCentroid_data_array\nfunction specCentroid_load_frame(this_fftsize, startIndex) {\n    if (this_fftsize > specCentroid_data_array_size) {\n        //safeguard against writing out of bounds of specCentroid_data_array\n        this_fftsize = specCentroid_data_array_size;\n        post(\"WARNING!!! fftsize was set to value > specCentroid_data_array_size\");\n        post(\"fftsize now = specCentroid_data_array_size to avoid crash\");\n    }\n    \n    //store all fftbuf data in specCentroid_data_array in SC's native FFT buffer format: [dc, nyq, bin1 mag, bin1 phase, bin2 mag, bin2 phase, etc]...\n    for (var i : Int = 0; i < this_fftsize/2; i++) {\n        if (i < 1) {\n            //post(\"===========\");\n            //no conversion needed for these...\n            var dc = peek(fftbuf, startIndex);\n            var nyq = peek(fftbuf, startIndex + 1);\n            specCentroid_data_array[0] = dc[0];\n            specCentroid_data_array[1] = nyq[0];\n        }\n        else if (i >= 1 && (i < this_fftsize/2)) {\n        \t//using sda_index_x and sda_index_y to decouple specFlat_data_array write positions from fftbuf read positions via startIndex\n            var sda_index_x : Int = 2 * i;\n            var sda_index_y : Int = sda_index_x + 1;\n            var read_index_x : Int = sda_index_x + startIndex;\n            var read_index_y : Int = read_index_x + 1;\n            var real = peek(fftbuf, read_index_x);\n            var imaginary = peek(fftbuf, read_index_y);\n            \n            var polar = cartopol(real[0], imaginary[0]); //convert to polar\n            specCentroid_data_array[sda_index_x] = polar[0]; //mag\n            specCentroid_data_array[sda_index_y] = polar[1]; //phase\n        }\n    }\n}\n\nfunction SpecCentroid_next() {\n    var outval = 0.0;\n    \n    if (needs_init) {\n        specCentroid_init(fftsize);\n        needs_init = 0;\n    }\n    \n    var samplecount : Int = samplecount(); //total # of samples elapsed since RNBO code was loaded, at the start of this audio buffer\n    //if we've started a new audio buffer, or we've incremented past the I/O buffer size, reset fftbuf_index (read index) to 0\n    if (samplecount != last_samplecount || fftbuf_index >= vectorsize()) {\n\t\tfftbuf_index = 0;\n\t\tlast_samplecount = samplecount;\n\t}\n    \n    //FFTAnalyser_GET_BUF //source\n    specCentroid_load_frame(fftsize, fftbuf_index);\n    fftbuf_index += fftsize; //increment fftbuf_index by fftsize (to handle cases when fftsize != I/O vector size)\n    \n    //SCPolarBuf* p = ToPolarApx(buf); //source (in specCentroid_load_frame() )\n\n    //GET_BINTOFREQ //source (in specCentroid_init() )\n    \n    //double num = sc_abs(p->nyq) * (numbins + 1); //source\n    var num = abs(specCentroid_data_array[1]) * (numbins + 1);\n    \n    //double denom = sc_abs(p->nyq); //source\n    var denom = abs(specCentroid_data_array[1]);\n\n    for (var i = 0; i < numbins; ++i) {\n        var index_bin_mag : Int = (2 * i) + 2; //bin mag values are even indeces starting at 2 (dc and nyq are 0 and 1) in 'specCentroid_data_array'\n        \n        //num += sc_abs(p->bin[i].mag) * (i + 1); //source\n        num += abs(specCentroid_data_array[index_bin_mag]) * (i + 1);\n        \n        //denom += sc_abs(p->bin[i].mag); //source\n        denom += abs(specCentroid_data_array[index_bin_mag]);\n    }\n\n    //ZOUT0(0) = unit->outval = denom == 0.0 ? 0.f : (float)(bintofreq * num / denom); //source\n    outval = denom == 0.0 ? 0.0 : (bintofreq * num / denom);\n    out1 = outval;\n}\n\nSpecCentroid_next();\n",
+                        "hot": 0,
                         "safemath": 1
                     },
-                    "rnbo_serial": 2,
+                    "rnbo_serial": 7,
                     "rnbo_uniqueid": "codebox_obj-6",
                     "rnboinfo": {
                         "needsInstanceInfo": 1,
@@ -1685,8 +1943,8 @@
                     "patching_rect": [ 731.0, 369.0, 28.0, 23.0 ],
                     "rnbo_classname": "in",
                     "rnbo_extra_attributes": {
-                        "meta": "",
-                        "comment": "Enable (Continuous I/O)"
+                        "comment": "Enable (Continuous I/O)",
+                        "meta": ""
                     },
                     "rnbo_serial": 3,
                     "rnbo_uniqueid": "in_obj-68",
@@ -1766,8 +2024,8 @@
                     "patching_rect": [ 731.0, 419.0, 24.0, 24.0 ],
                     "rnbo_classname": "toggle",
                     "rnbo_extra_attributes": {
-                        "order": "",
-                        "preset": 0
+                        "preset": 0,
+                        "order": ""
                     },
                     "rnbo_serial": 4,
                     "rnbo_uniqueid": "toggle_obj-50"
@@ -1800,19 +2058,19 @@
                     "patching_rect": [ 1553.0, 378.0, 209.0, 23.0 ],
                     "rnbo_classname": "param",
                     "rnbo_extra_attributes": {
-                        "enum": "",
-                        "tonormalized": "",
-                        "steps": 0.0,
-                        "ctlin": 0.0,
-                        "meta": "",
-                        "fromnormalized": "",
+                        "preset": 1,
                         "sendinit": 1,
-                        "unit": "",
+                        "meta": "",
                         "displayname": "",
                         "displayorder": "-",
+                        "fromnormalized": "",
                         "exponent": 1.0,
+                        "enum": "",
+                        "ctlin": 0.0,
+                        "unit": "",
+                        "tonormalized": "",
                         "order": "0",
-                        "preset": 1
+                        "steps": 0.0
                     },
                     "rnbo_serial": 2,
                     "rnbo_uniqueid": "fftsize",
@@ -2360,9 +2618,9 @@
                     "patching_rect": [ 56.0, 179.0, 575.0, 456.0 ],
                     "rnbo_classname": "codebox~",
                     "rnbo_extra_attributes": {
-                        "expr": "",
                         "nocache": 0,
                         "code": "//copy fftstream data of current buffer to fftbuf\n//and translate it to be compatible with SC FFT format\n//dc | nyq | bin1 (r) | bin 1 (i) | bin2 (r) | bin2 (i) ...\n\n@param({min: 64, max: 2048}) fftsize = 1024;\n@state last_fftsize = 0;\n@state fftbuf = new buffer(\"local:fftbuf_1\"); //reference to data \"fftbuf\" object in RNBO patch\n\n@state write_index : Int = 0; //from 0 to (vectorsize() - 1)\n@state index_offset : Int = 0; //increments by fftsize each time fft_index wraps around back to 0\n@state reset_write_index : Int = 0;\n\nconst enable_test : Int = 0;\nconst enable_logs : Int = 0;\nconst max_log_posts : Int = 2050;\n@state log_counter : Int = 0;\n\nvar real = in1;\nvar imaginary = in2;\nvar fft_index = intnum(in3);\nvar write_to_fftbuf = intnum(in4);\n\nvar testval : number;\n\n\nfunction dspsetup() {\n    bufferclear(fftbuf);\n    write_index = 0;\n    index_offset = 0;\r\n    //post(\"[specCent-fftconvert~] fftsize = \", fftsize);\n}\n\n\nif (!(last_fftsize == fftsize)) {\n\tif (enable_logs) {\n\t\tpost(\"[fftstream-converter~] --> NEW FFTSIZE = \", fftsize);\n    \tpost(\"[fftstream-converter~] --> LAST FFTSIZE = \", last_fftsize);\n\t}\n    last_fftsize = fftsize;\n    reset_write_index = 1;\n}\n\n\nif (write_to_fftbuf) {\n    //if write_to_fftbuf is enabled and then disabled, reset write_index to 0\n    if (reset_write_index) {\n        reset_write_index = 0;\n        write_index = 0;\n        index_offset = 0;\n        log_counter = 0;\n        if (enable_logs) {\n            post(\"[fft-convert~] write_index reset to 0 ------\");\n            post(\"[fft-convert~] log_counter reset to 0 ------\");\n        }\n    }\n    \n    //fft_index isn't guaranteed to always start at 0 (like when I/O buffer size < fftsize), so handle this case and align write_index w/ current fft_index\n    if (write_index == 0 && fft_index != 0) {\n    \tif (enable_logs) {\n    \t\tpost(\"[fft-convert~] fft_index out of sync w/ write_index! | write_index = 0 | fft_index = \", fft_index);\n    \t}\n        continue; //skip samples until write_index becomes in sync w/ fft_index again (since this I/O cycle started in the middle of fftstream processing and we've missed some samples/freq bins)\n    }\n    \n    if (enable_test) {testval = fft_index;} //test\n    \n    if (fft_index < 1) {//dc\n        if (enable_test) {\n            testval = 123456;\n            poke(fftbuf, testval, write_index); //test\n        }\n        else {\n            poke(fftbuf, in1, write_index); //copy real\n        }\n        \n        if (vectorsize() > fftsize) {//if I/O buffersize > fftsize\n            index_offset = write_index; //increment index_offset each fft_index wrap around (0, 64, 128, 192, 256, etc.)\n        }\n    }\n    else if (fft_index >= 1 && fft_index < fftsize/2) {\n        var index_x : Int = (fft_index * 2) + index_offset;\n\t\tvar index_y : Int = index_x + 1;\n\t\t\n\t\tif (enable_test) {\n\t\t\tvar testval2 : number = testval + 0.1;\n\t\t\tpoke(fftbuf, testval, index_x); //test\n\t\t\tpoke(fftbuf, testval2, index_y); //test\n\t\t}\n\t\telse {\n\t\t\tpoke(fftbuf, in1, index_x); //copy real\n\t\t\tpoke(fftbuf, in2, index_y); //copy imaginary\n\t\t}\n    }\n    else if (fft_index == fftsize/2) {//nyquist\n        if (enable_test) {\n\t\t\tpoke(fftbuf, testval, (index_offset + 1)); //test\n\t\t}\n\t\telse {\n\t\t\tpoke(fftbuf, in1, (index_offset + 1)); //copy real (put in SC's fft format's expected bin: 0-index + 1)\n\t\t}\n    }\n    \n    if (enable_logs) {\n        if (log_counter < max_log_posts) {\n            if (log_counter == 0) {\n                post(\"[fft-convert~] write_index | fft_index | index_offset | log_counter\");\n            }\n        \tpost(\"[fft-convert~] \", write_index, fft_index, index_offset, log_counter);\n            log_counter++;\n        }\n    }\n    \n    //increment write_index each sample\n    write_index++;\n    \n    if (vectorsize() >= fftsize) {\n    \t// reset write_index to 0 at the start of each new I/O buffer (when I/O buffer >= fftsize)\n    \tif (write_index >= vectorsize()) {\n        \twrite_index = 0;\n    \t}\n    }\n    else {\n    \t//if I/O buffer size < fftsize, reset write_index to 0 if it's >= fftsize\n    \tif (write_index >= fftsize) {\n        \twrite_index = 0;\n    \t}\n    }\n}\nelse {//write_to_fftbuf disabled \n    if (reset_write_index == 0) {\n        reset_write_index = 1; //ensure we reset the write_index to 0 the next time write_to_fftbuf is enabled\n    }\n}\n",
+                        "expr": "",
                         "safemath": 1
                     },
                     "rnbo_serial": 2,
@@ -2551,8 +2809,8 @@
                     "patching_rect": [ 56.0, 26.0, 35.0, 23.0 ],
                     "rnbo_classname": "in~",
                     "rnbo_extra_attributes": {
-                        "meta": "",
-                        "comment": ""
+                        "comment": "",
+                        "meta": ""
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "in~_obj-3",
@@ -2645,11 +2903,11 @@
                     "patching_rect": [ 198.0, 811.0, 76.0, 23.0 ],
                     "rnbo_classname": "number",
                     "rnbo_extra_attributes": {
-                        "maximum": "<none>",
-                        "initialFormat": "float",
+                        "preset": 0,
                         "minimum": "<none>",
                         "order": "",
-                        "preset": 0
+                        "initialFormat": "float",
+                        "maximum": "<none>"
                     },
                     "rnbo_serial": 4,
                     "rnbo_uniqueid": "number_obj-33"
@@ -2666,11 +2924,11 @@
                     "patching_rect": [ 106.0, 811.0, 50.0, 23.0 ],
                     "rnbo_classname": "number",
                     "rnbo_extra_attributes": {
-                        "maximum": "<none>",
-                        "initialFormat": "float",
+                        "preset": 0,
                         "minimum": "<none>",
                         "order": "",
-                        "preset": 0
+                        "initialFormat": "float",
+                        "maximum": "<none>"
                     },
                     "rnbo_serial": 5,
                     "rnbo_uniqueid": "number_obj-26"
@@ -2687,11 +2945,11 @@
                     "patching_rect": [ 14.0, 811.0, 50.0, 23.0 ],
                     "rnbo_classname": "number",
                     "rnbo_extra_attributes": {
-                        "maximum": "<none>",
-                        "initialFormat": "float",
+                        "preset": 0,
                         "minimum": "<none>",
                         "order": "",
-                        "preset": 0
+                        "initialFormat": "float",
+                        "maximum": "<none>"
                     },
                     "rnbo_serial": 6,
                     "rnbo_uniqueid": "number_obj-19"
@@ -2707,7 +2965,7 @@
                     "parameter_enable": 0,
                     "patching_rect": [ 14.0, 727.0, 24.0, 24.0 ],
                     "rnbo_classname": "button",
-                    "rnbo_serial": 1,
+                    "rnbo_serial": 2,
                     "rnbo_uniqueid": "button_obj-30"
                 }
             },
@@ -2721,12 +2979,12 @@
                     "patching_rect": [ 14.0, 769.0, 237.0, 23.0 ],
                     "rnbo_classname": "data",
                     "rnbo_extra_attributes": {
+                        "preset": 0,
                         "type": "",
-                        "fill": "",
                         "meta": "",
                         "samplerate": 0.0,
-                        "file": "",
-                        "preset": 0
+                        "fill": "",
+                        "file": ""
                     },
                     "rnbo_serial": 1,
                     "rnbo_uniqueid": "data_obj-22",
@@ -3107,6 +3365,12 @@
             },
             {
                 "patchline": {
+                    "destination": [ "obj-6", 0 ],
+                    "source": [ "obj-2", 0 ]
+                }
+            },
+            {
+                "patchline": {
                     "destination": [ "obj-18", 0 ],
                     "source": [ "obj-20", 0 ]
                 }
@@ -3159,7 +3423,7 @@
             },
             {
                 "patchline": {
-                    "destination": [ "obj-6", 0 ],
+                    "destination": [ "obj-36", 0 ],
                     "source": [ "obj-28", 0 ]
                 }
             },
@@ -3197,13 +3461,31 @@
             },
             {
                 "patchline": {
+                    "destination": [ "obj-10", 0 ],
+                    "source": [ "obj-35", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-35", 0 ],
+                    "source": [ "obj-36", 1 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-6", 0 ],
+                    "source": [ "obj-36", 0 ]
+                }
+            },
+            {
+                "patchline": {
                     "destination": [ "obj-39", 0 ],
                     "source": [ "obj-40", 0 ]
                 }
             },
             {
                 "patchline": {
-                    "destination": [ "obj-6", 0 ],
+                    "destination": [ "obj-36", 0 ],
                     "source": [ "obj-49", 0 ]
                 }
             },
@@ -3275,7 +3557,7 @@
             {
                 "patchline": {
                     "destination": [ "obj-6", 0 ],
-                    "midpoints": [ 1526.5, 522.0, 805.5, 522.0 ],
+                    "midpoints": [ 1526.5, 949.7890625, 846.5, 949.7890625 ],
                     "source": [ "obj-92", 0 ]
                 }
             }
